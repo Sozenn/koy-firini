@@ -183,7 +183,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 const $ = s => document.querySelector(s);
 const cv = $('#cv'), ctx = cv.getContext('2d'), app = $('#app');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v11';
+const GAME_VERSION = 'v12';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -416,7 +416,7 @@ const freshSt = () => ({
   BK:{ bins:{ hamur:0, findik:0, bal:0 }, out:0 },
 });
 const freshBranch = () => ({ stock:zeroProducts(), till:0, sold:0 });
-const fresh = () => ({ money:0, cash:0, cash2:0, unlocked:{}, paid:{}, hinted:{}, learned:{}, music:true,
+const fresh = () => ({ money:0, cash:0, cash2:0, unlocked:{}, paid:{}, hinted:{}, learned:{}, music:true, chatter:true,
   lv:{ spd:0, cap:0, ates:0, cashSpd:0, carSpd:0, gatSpd:0, vitrin:0, kutu:0, tepsi:0, orak:0, kova:0, sepet:0, kurek:0, ambar:0, bHiz:0, masa:0, garsonSpd:0,
     standUp:0, trSpd:0, vanCap:0, mudur:0 },
   counter:zeroProducts(), st:freshSt(), depot:Object.assign(Object.fromEntries(MAT_ORDER.map(m => [m, 0])), { bugday:4, su:2 }), carry:[], px:340, py:330, sound:true, intro:false, sold:0,
@@ -1002,9 +1002,11 @@ function floatTxt(text, x, y, col = '#f2b544') { floats.push({ text, x, y, col, 
 // Satıcının konuşma balonu: müşteriye ürün verirken erkeğe "abim", kadına "ablam" der
 let speech = [];
 function say(e, text, must = false) {
-  if (!must && speech.length >= 4) return;   // ekran balonla dolmasın
+  if (!G.chatter || speech.length >= 3 || (e.lastSpeechAt !== undefined && time - e.lastSpeechAt < 7)) return;
+  e.lastSpeechAt = time;
+  if (!must && speech.length >= 3) return;   // ekran balonla dolmasın
   speech = speech.filter(s => s.e !== e);
-  speech.push({ e, text, t:0 });
+  speech.push({ e, text, t:0, life:3.8 });
 }
 // Türk internet esprileri ve sokak ağzından kısa laflar
 const LINES = {
@@ -1026,6 +1028,33 @@ const line = (k, c) => pick(k === 'order' && c && !c.fem ? [...LINES.order, ...L
 function greet(e, c) {
   if (Math.random() < .5) say(e, c.fem ? 'Başşşşımla beraber ablam' : 'Başşımla beraber abim', true);
   else say(e, line(e === GAR ? 'garson' : 'serve'), true);
+}
+const BANTER = {
+  cow:['Möösaade edin, çalışıyorum.', 'Süt benden, köpürtmesi sizden.', 'Zam geldi mi? Ben hâlâ ot yiyorum.', 'Latte için yine beni aradılar.', 'Bugün de bütün yük memurda... möö!', 'Ben de laktozdan yoruldum.', 'Çimen büfesi ne zaman açılıyor?', 'Süt gibi iş, mesai çok.'],
+  hen:['Gıdak! Fazla mesaiye bir yumurta.', 'Yumurta benden, alkış size mi?', 'Bu yumurtaya imzamı atarım.', 'Tavuk mu yumurta mı? Önce maaş!', 'Kümeste dedikodu çok sıcak.', 'Organik çalışıyorum, mekanik yoruldum.', 'Gıdak! Bugün de üretim rekoru.', 'Bana yem ver, sana poğaça olsun.'],
+  carrier:['Bu un çuvalı spor salonu sayılır mı?', 'Kariyerimde yükseldim: iki çuval.', 'Bant var, ben niye koşuyorum?', 'Unutmadım, un taşıyorum.', 'CV: hızlıyım, hamur işinde iyiyim.', 'Yol verin, karbonhidrat geliyor!', 'Bir tur daha... köy maratonu!', 'Ben buraya çırak diye gelmiştim.'],
+  gatherer:['Tarlada Wi-Fi yok, huzur var.', 'Hasat değil, günlük adım hedefi.', 'Sepet dolu, gönül yorgun.', 'Buğdayın da bitmeyen işi varmış.', 'Bugün yine toprakla toplantıdayım.', 'Uzaktan çalışma dediler, tarla uzakmış.'],
+  cashier:['Bozuk yok, sıcak ekmek var.', 'Kasa küçük, hayaller büyük.', 'Kart mı, nakit mi, bir iltifat mı?', 'Fişi de sıcacık verelim.', 'Sayın müşterim, simit de yatırım.'],
+  waiter:['Benim de bir masam olsun artık.', 'Tepside denge, hayatta yok.', 'Sipariş sıcak, ayaklar yorgun.', 'Garson değil, lezzet kuryesiyim.', 'Masa üç, gönlüm güç.'],
+  baker:['Bir fırın açtık, köyü doyurduk.', 'CEO: Çuvalı Eline Olan.', 'Hamur yoğurduk, hayat yoğurdu.', 'Diyet yarın, üretim bugün.', 'Ben ekmeğimin peşindeyim. Gerçekten.', 'İşler tıkırında, dizler çıtırında.', 'Şube açtım, boş vakit kapandı.', 'Kendi işim olsun dedim. Hep işim oldu.'],
+  money:['Ciro var, tatil yok.', 'Bu ses... altın sesi!', 'Ekmek parası, kelimenin tam anlamıyla.', 'Büyüyünce fırın sahibi olacağım. Oldum!']
+};
+let banterT = 5, banterCursor = 0;
+function updateBanter(dt) {
+  if (!G.chatter || (banterT -= dt) > 0) return;
+  banterT = 8 + Math.random() * 5;
+  if (speech.length >= 2) return;
+  const candidates = [[P,'baker'], ...carriers.map(n=>[n,'carrier']), ...gatherers.map(n=>[n,'gatherer']),
+    ...CSS.filter(n=>G.unlocked[n.unlock]).map(n=>[n,'cashier']),
+    ...(G.unlocked.garson ? [[GAR,'waiter']] : []),
+    ...(G.unlocked.kalfa ? [[KALFA,'baker']] : []),
+    ...NODES.filter(n=>n.m==='sut' && nodeOpen(n)).map(n=>[n,'cow']),
+    ...(G.unlocked.coop ? critters.filter(n=>n.k==='hen').map(n=>[n,'hen']) : [])];
+  const visible = candidates.filter(([e]) => Math.abs(e.x-cam.x) < vw/(2*zoom)-25 && Math.abs(e.y-cam.y) < vh/(2*zoom)-90 && !speech.some(s=>s.e===e) && (e.lastSpeechAt === undefined || time-e.lastSpeechAt>=15));
+  if (!visible.length) return;
+  const [e,kind] = visible[banterCursor++ % visible.length];
+  const pool = BANTER[kind].filter(text=>text!==e.lastBanter);
+  const text = pick(pool); e.lastBanter=text; say(e,text);
 }
 function burst(x, y) {
   const cols = ['#f2b544','#8ccf4a','#ff8fb0','#e8c25a','#f7efe2'];
@@ -1050,7 +1079,7 @@ function gather(e, carry, capN, dt, timeFn, onlyMat) {
   if (e.bitT > .22) { e.bitT = 0; chips(best.x, best.y, MATS[best.m].bit, 2); if (e === P) sfx('chop'); }
   if (e.gT >= need) {
     e.gT = 0; best.amt--; carry.push(best.m); chips(best.x, best.y, MATS[best.m].bit, 5);
-    if (best.m === 'sut' && Math.random() < .3) say(best, 'Hayır altıma sıçtım');   // sağılan inek söylenir
+    if (best.m === 'sut' && Math.random() < .25) say(best, pick(BANTER.cow));   // sağılan inek söylenir
     fly('item', best.m, best.x, best.y - 10, cp(e).x, cp(e).y, .22);
     if (e === P) sfx('pick');
   }
@@ -1330,16 +1359,70 @@ function beltPaths() {
   for (const id in FARM_LINES) if (G.unlocked[id]) out.push(FARM_LINES[id].path(FARM_LINES[id].m));
   return out;
 }
-function drawBelts() {
-  const paths = beltPaths(); if (!paths.length) return;
-  ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
-  for (const p of paths) { ctx.strokeStyle = '#1e1a17'; ctx.lineWidth = 12; ctx.beginPath(); p.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); }
-  for (const p of paths) {
-    ctx.strokeStyle = '#4a4440'; ctx.lineWidth = 8; ctx.beginPath(); p.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
-    ctx.strokeStyle = 'rgba(242,181,68,.55)'; ctx.lineWidth = 2; ctx.setLineDash([4, 10]); ctx.lineDashOffset = -time * 90 * (1 + .15 * G.lv.bHiz);
-    ctx.beginPath(); p.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke(); ctx.setLineDash([]);
+// Asma konveyör: yer düzleminde yalnızca gölge ve istasyon yükselticileri vardır.
+// Ortak hatlar birleştirilir; aynı ray her istasyon için tekrar boyanmaz.
+const BELT_HEIGHT = 78;
+let beltArtCache = {key:'', segments:[], ports:[]};
+function conveyorArt() {
+  const paths=beltPaths(), key=JSON.stringify(paths);
+  if (key===beltArtCache.key) return beltArtCache;
+  const groups=new Map(), diagonal=[], ports=new Map();
+  for (const path of paths) {
+    for (const p of [path[0],path[path.length-1]]) ports.set(p.join(','),p);
+    for (let i=1;i<path.length;i++) {
+      const a=path[i-1], b=path[i]; if(a[0]===b[0] && a[1]===b[1])continue;
+      const vertical=a[0]===b[0], horizontal=a[1]===b[1];
+      if(!vertical&&!horizontal){diagonal.push([a,b]);continue;}
+      const axis=vertical?1:0, fixed=a[1-axis], k=axis+':'+fixed;
+      if(!groups.has(k))groups.set(k,{axis,fixed,spans:[]});
+      groups.get(k).spans.push([Math.min(a[axis],b[axis]),Math.max(a[axis],b[axis])]);
+    }
   }
-  for (const r of riders) { const [x, y] = pointOnPath(r.path, r.d); drawItem(x, y + 5, r.item, .8); }
+  const segments=diagonal;
+  for(const {axis,fixed,spans} of groups.values()){
+    spans.sort((a,b)=>a[0]-b[0]);const merged=[];
+    for(const span of spans){const last=merged[merged.length-1];if(last&&span[0]<=last[1]+.1)last[1]=Math.max(last[1],span[1]);else merged.push(span.slice());}
+    for(const [lo,hi] of merged)segments.push(axis===0?[[lo,fixed],[hi,fixed]]:[[fixed,lo],[fixed,hi]]);
+  }
+  return beltArtCache={key,segments,ports:[...ports.values()]};
+}
+function beltInView(a,b) {
+  const hx=vw/(2*zoom)+30,hy=vh/(2*zoom)+BELT_HEIGHT+30;
+  return Math.max(a[0],b[0])>cam.x-hx && Math.min(a[0],b[0])<cam.x+hx && Math.max(a[1],b[1])>cam.y-hy && Math.min(a[1],b[1])<cam.y+hy;
+}
+function drawBeltGround() {
+  const art=conveyorArt();ctx.save();ctx.lineCap='round';
+  for(const [a,b] of art.segments){if(!beltInView(a,b))continue;ctx.strokeStyle='rgba(0,0,0,.12)';ctx.lineWidth=16;ctx.beginPath();ctx.moveTo(a[0]+7,a[1]+5);ctx.lineTo(b[0]+7,b[1]+5);ctx.stroke();}
+  for(const [x,y] of art.ports){if(!beltInView([x,y],[x,y]))continue;
+    ctx.fillStyle='#303d43';rr(x-7,y-BELT_HEIGHT,14,BELT_HEIGHT,4);
+    ctx.fillStyle='#73858b';rr(x-5,y-BELT_HEIGHT,3,BELT_HEIGHT-4,1);
+    ctx.fillStyle='#263136';rr(x-12,y-5,24,10,3);
+    ctx.fillStyle='#d3ad55';rr(x-4,y-16,8,3,1);
+  }ctx.restore();
+}
+function drawBelts() {
+  const art=conveyorArt(), h=BELT_HEIGHT;ctx.save();
+  for(const [a,b] of art.segments){
+    if(!beltInView(a,b))continue;
+    const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy),nx=-dy/len,ny=dx/len;
+    // Transparanlık yalnızca oyuncunun başını örten ray kesiminde uygulanır.
+    const u=Math.max(0,Math.min(1,((P.x-a[0])*dx+(P.y-36-a[1]+h)*dy)/(len*len)));
+    ctx.globalAlpha=Math.hypot(P.x-a[0]-u*dx,P.y-36-(a[1]+u*dy-h))<38?.42:1;
+    const stroke=(color,width,shift=0)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(a[0],a[1]-h+shift);ctx.lineTo(b[0],b[1]-h+shift);ctx.stroke();};
+    stroke('#142027',21,5);stroke('#73868e',21);stroke('#b1c0c5',17);stroke('#263c43',13);
+    // Kauçuk üzerindeki enine kaburgalar: aynı hızda kayar, makaralar döner.
+    const phase=(time*90*(1+.15*G.lv.bHiz))%14;
+    ctx.strokeStyle='#486168';ctx.lineWidth=2;ctx.lineCap='butt';
+    for(let d=phase;d<len;d+=14){const x=a[0]+dx*d/len,y=a[1]+dy*d/len-h;ctx.beginPath();ctx.moveTo(x+nx*5,y+ny*5);ctx.lineTo(x-nx*5,y-ny*5);ctx.stroke();}
+    ctx.strokeStyle='#d8e1df';ctx.lineWidth=1;
+    for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(a[0]+nx*9*side,a[1]-h+ny*9*side);ctx.lineTo(b[0]+nx*9*side,b[1]-h+ny*9*side);ctx.stroke();}
+    for(const [x,yy] of [a,b]){const y=yy-h;ctx.fillStyle='#9eafb5';circ(x,y,7);ctx.fillStyle='#354b53';circ(x,y,4.5);ctx.strokeStyle='#f0c666';ctx.lineWidth=1.5;const ang=time*5;ctx.beginPath();ctx.moveTo(x-Math.cos(ang)*3,y-Math.sin(ang)*3);ctx.lineTo(x+Math.cos(ang)*3,y+Math.sin(ang)*3);ctx.stroke();}
+  }
+  ctx.globalAlpha=1;
+  // Tavandan sarkan ince askılar; yürüyüş düzleminde ayak/engel yok.
+  for(const [x,y] of art.ports){if(!beltInView([x,y],[x,y]))continue;ctx.strokeStyle='#91a0a8';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-8,y-h-18);ctx.lineTo(x-8,y-h+2);ctx.moveTo(x+8,y-h-18);ctx.lineTo(x+8,y-h+2);ctx.stroke();ctx.fillStyle='#dbc17d';rr(x-13,y-h-20,26,4,2);}
+  for(const r of riders){const [x,y]=pointOnPath(r.path,r.d);if(!beltInView([x,y],[x,y]))continue;ctx.fillStyle='rgba(0,0,0,.3)';ell(x+1,y-h+6,7,3);drawItem(x,y-h+5,r.item,.8);}
+  ctx.restore();
 }
 
 /* ================= Müşteriler ve talep ================= */
@@ -2452,12 +2535,13 @@ function update(dt) {
   updateVan(dt);
   updateBranches(dt);
   updateCritters(dt);
+  updateBanter(dt);
   checkQuests(dt);
 
   // altın yığınları: köy fırınınınki ve Çarşı şubesininki; üstünde durunca kesene akar
   let atPile = null;
   for (const [k, pile] of [['cash', CASHPILE], ['cash2', CASHPILE2]]) if (G[k] > 0 && dist2(P, pile.x, pile.y) < 38 * 38) atPile = [k, pile];
-  if (atPile && !P.atPile && G[atPile[0]] >= 20 && Math.random() < .4) say(P, 'Benim paramı verin abi');   // para yığınına her gelişte bazen
+  if (atPile && !P.atPile && G[atPile[0]] >= 20 && Math.random() < .4) say(P, pick(BANTER.money));   // para yığınına her gelişte bazen
   P.atPile = !!atPile;
   if (atPile) {
     const [k, pile] = atPile, amt = Math.min(G[k], Math.max(G[k] * 4, 40) * dt);
@@ -2470,7 +2554,7 @@ function update(dt) {
 
   for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.t += dt / p.dur; if (p.t >= 1) parts.splice(i, 1); }
   for (let i = floats.length - 1; i >= 0; i--) { const f = floats[i]; f.t += dt; if (f.t > 1.1) floats.splice(i, 1); }
-  for (let i = speech.length - 1; i >= 0; i--) if ((speech[i].t += dt) > 2.4) speech.splice(i, 1);
+  for (let i = speech.length - 1; i >= 0; i--) if ((speech[i].t += dt) > speech[i].life) speech.splice(i, 1);
   for (let i = confetti.length - 1; i >= 0; i--) { const c = confetti[i]; c.t += dt; c.vy += 420 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.r += dt * 8; if (c.t > 1.4) confetti.splice(i, 1); }
   for (let i = bits.length - 1; i >= 0; i--) { const b = bits[i]; b.t += dt; b.vy += 380 * dt; b.x += b.vx * dt; b.y += b.vy * dt; if (b.t > .55) bits.splice(i, 1); }
 }
@@ -3309,7 +3393,7 @@ function render() {
   }
   ctx.fillStyle = `rgba(214,160,90,${inDepot(P) ? .35 : .15})`; rr(DEPOT.x, DEPOT.y, DEPOT.w, DEPOT.h, 8);
   ctx.strokeStyle = `rgba(232,180,110,${dg + .2})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(DEPOT.x, DEPOT.y, DEPOT.w, DEPOT.h, 8); ctx.stroke();
-  drawBelts();
+  drawBeltGround();
   drawBoard(0); if (G.unlocked.carsi) drawBoard(1);
   if (ORDER) { const nearB = dist2(P, BASKET.x, BASKET.y) < (BASKET.r + 8) ** 2; ctx.strokeStyle = nearB ? 'rgba(242,181,68,.9)' : 'rgba(242,181,68,.45)'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(BASKET.x, BASKET.y, BASKET.r, 0, PI2); ctx.stroke(); ctx.setLineDash([]); }
   for (const a of AREAS) drawAreaLock(a);
@@ -3360,6 +3444,7 @@ function render() {
   }]);
   L.sort((a, b) => a[0] - b[0]); for (const [, f] of L) f();
   drawLocks();
+  drawBelts();
   drawLighting();
 
   // üst katman
@@ -3406,15 +3491,19 @@ function render() {
     if (p.kind === 'coin') coin(x, y, 5); else drawItem(x, y, p.type, .95);
   }
   for (const s of speech) {
-    const hy = s.e === P || s.e.want ? 108 : s.e.m ? 50 : 80, x = s.e.x, y = s.e.y - hy;   // inekte alçak   // müşterilerde istek balonunun üstünde
-    ctx.globalAlpha = Math.min(1, (2.4 - s.t) * 3, s.t * 8);
-    ctx.font = '800 12px "Arial Rounded MT Bold",ui-rounded,"Trebuchet MS",system-ui,sans-serif';
-    const w = ctx.measureText(s.text).width + 18;
-    ctx.fillStyle = 'rgba(10,8,6,.35)'; rr(x - w / 2 + 2, y - 12, w, 24, 12);
-    ctx.fillStyle = '#fffaf0'; rr(x - w / 2, y - 14, w, 24, 12);
-    ctx.beginPath(); ctx.moveTo(x - 5, y + 9); ctx.lineTo(x, y + 16); ctx.lineTo(x + 5, y + 9); ctx.fill();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#3a2414'; ctx.fillText(s.text, x, y - 2);
-    ctx.globalAlpha = 1;
+    const hy=s.e===P||s.e.want?108:s.e.m||s.e.k==='hen'?55:80;
+    const font=Math.max(12,12/zoom),lh=font*1.3,maxW=Math.min(210,vw/zoom-32);
+    ctx.font=`800 ${font}px system-ui,sans-serif`;
+    const lines=[];let row='';for(const word of s.text.split(' ')){const next=row?row+' '+word:word;if(ctx.measureText(next).width>maxW&&row){lines.push(row);row=word;}else row=next;}if(row)lines.push(row);
+    const w=Math.max(...lines.map(t=>ctx.measureText(t).width))+18,bh=lines.length*lh+12;
+    const left=cam.x-vw/(2*zoom)+8,right=cam.x+vw/(2*zoom)-8;
+    const x=Math.max(left+w/2,Math.min(right-w/2,s.e.x)),y=s.e.y-hy;
+    ctx.globalAlpha=Math.min(1,(s.life-s.t)*3,s.t*8);
+    ctx.fillStyle='rgba(0,0,0,.25)';rr(x-w/2+2,y-bh+2,w,bh,10);
+    ctx.fillStyle='#fffaf0';rr(x-w/2,y-bh,w,bh,10);
+    ctx.beginPath();ctx.moveTo(x-5,y-1);ctx.lineTo(x,y+7);ctx.lineTo(x+5,y-1);ctx.fill();
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#3a2414';
+    lines.forEach((text,i)=>ctx.fillText(text,x,y-bh+6+lh*(i+.5)));ctx.globalAlpha=1;
   }
   for (const f of floats) { ctx.globalAlpha = Math.min(1, 2.2 - f.t * 2); txt(f.text, f.x, f.y - f.t * 30, 14, f.col); ctx.globalAlpha = 1; }
   for (const c of confetti) { ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.c; ctx.globalAlpha = Math.max(0, 1 - c.t / 1.4); ctx.fillRect(-3, -2, 6, 4); ctx.restore(); }
@@ -3596,6 +3685,7 @@ function openMenu() {
     ['Tarif defteri', '', openBook],
     [`Ses: ${G.sound ? 'Açık' : 'Kapalı'}`, '', () => { G.sound = !G.sound; save(); openMenu(); }],
     [`Müzik: ${G.music ? 'Açık' : 'Kapalı'}`, '', () => { G.music = !G.music; save(); openMenu(); }],
+    [`Replikler: ${G.chatter ? 'Açık' : 'Kapalı'}`, '', () => { G.chatter = !G.chatter; speech=[]; save(); openMenu(); }],
     ['Nasıl oynanır', '', () => modal(`<h2>Nasıl oynanır</h2>${HOW}`, [['Tamam', 'pri', openMenu]])],
     ['Kaydı yedekle', '', openBackup],
     ['Kaydı geri yükle', '', openRestore],
