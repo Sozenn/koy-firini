@@ -153,6 +153,8 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 #modal .note{font-size:13px;color:var(--muted)}
 </style>
 
+<style>#hud{display:grid!important;grid-template-columns:1fr auto;gap:6px!important;align-items:start;background:linear-gradient(#15291ee6,#15291e00);padding-bottom:14px}#hud .hl{display:flex!important;grid-column:1/-1;flex-direction:row!important;flex-wrap:nowrap!important;width:100%;align-items:center;justify-content:space-between;gap:6px}#cash{height:38px;border-radius:12px;font-size:20px;background:#223a2bed;border-color:#91a88466;min-width:94px}#daypill{height:38px;gap:5px;font-size:10px!important;border-radius:12px;background:#223a2bed;border-color:#91a88466;min-width:0;max-width:calc(100% - 100px);padding:6px 8px}#daypill .bar{width:28px;flex:none}#dayTxt{min-width:0;overflow:hidden;text-overflow:ellipsis}.stars{font-size:10px;flex:none}#goal{grid-column:1/-1;order:0;white-space:normal!important;text-align:left;max-height:42px;font-size:11px!important;line-height:1.35;padding:6px 10px;background:#223a2bed;border:1px solid #91a88444;border-radius:10px}#dropBtn{position:fixed;left:max(14px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));height:42px;border-radius:12px;background:#a94935;color:white}#mobileTools button{background:#243d2fed!important;border-color:#a0b29488;box-shadow:0 3px 8px #10241944}#recipe{border-radius:12px!important;background:#243d2ff5;border:1px solid #a3bd8d88}#toast{background:#f8edcf;color:#293b2b;box-shadow:0 4px 18px #182c2744;font-size:12px;max-width:80%;border:1px solid #b5c394}#modal .box,#desk{background:#1e3027;border-color:#667c60}#deskTabs button.on{background:#bad09b;color:#213024}@media(max-height:480px){#goal{max-height:27px;padding:4px 8px}#cash,#daypill{height:32px}#hud{gap:3px!important}}
+</style>
 <div id="app">
   <canvas id="cv" aria-label="Oyun alanı. Parmağını sürükleyerek ya da WASD / ok tuşlarıyla yürü."></canvas>
   <div id="hud">
@@ -182,9 +184,10 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 <script>
 (() => {
 const $ = s => document.querySelector(s);
-const cv = $('#cv'), ctx = cv.getContext('2d'), app = $('#app');
+const cv = $('#cv'), app = $('#app');
+let ctx = cv.getContext('2d');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v16';
+const GAME_VERSION = 'v17';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -417,7 +420,7 @@ const freshSt = () => ({
   BK:{ bins:{ hamur:0, findik:0, bal:0 }, out:0 },
 });
 const freshBranch = () => ({ stock:zeroProducts(), till:0, sold:0 });
-const fresh = () => ({ journal:freshJournal(), money:0, cash:0, cash2:0, unlocked:{}, paid:{}, hinted:{}, learned:{}, music:true, chatter:true,
+const fresh = () => ({ transit:[], journal:freshJournal(), money:0, cash:0, cash2:0, unlocked:{}, paid:{}, hinted:{}, learned:{}, music:true, chatter:true,
   lv:{ spd:0, cap:0, ates:0, cashSpd:0, carSpd:0, gatSpd:0, vitrin:0, kutu:0, tepsi:0, orak:0, kova:0, sepet:0, kurek:0, ambar:0, bHiz:0, masa:0, garsonSpd:0,
     standUp:0, trSpd:0, vanCap:0, mudur:0 },
   counter:zeroProducts(), st:freshSt(), depot:Object.assign(Object.fromEntries(MAT_ORDER.map(m => [m, 0])), { bugday:4, su:2 }), carry:[], px:340, py:330, sound:true, intro:false, sold:0,
@@ -504,13 +507,14 @@ function normalize(d) {
   if (!['auto','supply','stand','counter'].includes(out.workerPri)) out.workerPri = 'auto';
   if (!['balanced','stand'].includes(out.standMode)) out.standMode = 'balanced';
   if (!['classic','sage','rose'].includes(out.decor)) out.decor = 'classic';
+  out.transit = normalizeTransit(d.transit);
   out.journal = normalizeJournal(d.journal);
   out.lightGraphics = out.lightGraphics === true;
   out.viewScale = Number.isFinite(out.viewScale) ? Math.max(.6,Math.min(1.3,out.viewScale)) : 1;
   return out;
 }
 function load() { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) {} return null; }
-function save() { G.px = P.x; G.py = P.y; G.lastSeen = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
+function save() { if(riderGame===G) G.transit=riders.map(r=>({line:r.line,item:r.item,dst:r.dst,path:r.path.map(p=>p.slice()),d:r.d})); G.px = P.x; G.py = P.y; G.lastSeen = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
 
 /* ================= Ses ================= */
 let ac = null;
@@ -1230,14 +1234,15 @@ $('#dropBtn').addEventListener('click', dumpCarry);
 /* ================= Bantlar ================= */
 // Her bant belli aralıkla bir eşya gönderir; eşya yol boyunca kayar, varınca kutuya/vitrine girer.
 // Gönderirken talebi olan hedefe öncelik verir; yoldaki eşyalar hedefin kapasitesinden düşülür.
-let riders = [];
+let riders = [], riderGame = null;
 const beltT = {};
-const TRUNK_IN = 314, TRUNK_UN = 330, TRUNK_OUT = 392;   // ambar→istasyon, değirmen→fırın, fırın→vitrin hatları
-const depotExit = { x:DEPOT.x + 36, y:DEPOT.y };
-function pathDepotTo(s, m) { const b = binPos(s, Object.keys(s.recipe).indexOf(m)); return [[depotExit.x, depotExit.y], [depotExit.x, TRUNK_IN], [b.x, TRUNK_IN], [b.x, b.y + 8]]; }
-function pathUnTo(s) { const b = binPos(s, Object.keys(s.recipe).indexOf('un')), sx = ST.M.x + 30; return [[sx, ST.M.y + 92], [sx, TRUNK_UN], [b.x, TRUNK_UN], [b.x, b.y + 8]]; }
-function pathToStand(s) { return [[s.x+32,s.y+92],[s.x+32,TRUNK_OUT],[360,TRUNK_OUT],[360,STAND_DROP.y-30],[170,STAND_DROP.y-30],[170,STAND_DROP.y+12]]; }
-function pathToCounter(s) { const ox = s.x + 32, cx = crateX(s.out) + CRATE.w / 2; return [[ox, s.y + 92], [ox, TRUNK_OUT], [cx, TRUNK_OUT], [cx, COUNTER.y - 12]]; }
+const TRUNK_IN = 306, TRUNK_UN = 328, TRUNK_OUT = 356;   // ambar→istasyon, değirmen→fırın, fırın→vitrin hatları
+const depotExit = { x:695, y:DEPOT.y };
+function pathDepotTo(s, m) { const inlet=[s.x-44,s.y+58]; return [[depotExit.x,depotExit.y],[depotExit.x,TRUNK_IN],[inlet[0],TRUNK_IN],inlet]; }
+function pathUnTo(s) { const sx=ST.M.x+30;return [[sx,ST.M.y+92],[sx,TRUNK_UN],[s.x+44,TRUNK_UN],[s.x+44,s.y+58]]; }
+function pathToStand(s) { return [[s.x+32,s.y+92],[s.x+32,384],[48,384],[48,STAND.y+10],[STAND.x+6,STAND.y+10]]; }
+function pathToCounter(s) { return outputPath(s,COUNTER,TRUNK_OUT); }
+function outputPath(s,counter,trunk){const x=counter.x+counter.w-12,ox=s.x+32,start=[[ox,s.y+92],[ox,trunk]];return ox<=x?[...start,[x,trunk],[x,counter.y-12]]:[...start,[718,trunk],[718,trunk+22],[x,trunk+22],[x,counter.y-12]];}
 const pathLen = p => p.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
 function pickOven(filterFn, list = OVENS0) {   // talebi olan, kutusu boşalmış fırın önce
   let best = null, bs = -1;
@@ -1245,16 +1250,16 @@ function pickOven(filterFn, list = OVENS0) {   // talebi olan, kutusu boşalmı�
   return best;
 }
 // Çarşı şubesi bant hatları (köy fırınınınkilerin 1000 aşağısı); ambardan şubeye giden hat x=620'den iner
-const TRUNK2_IN = CARSI_Y + 314, TRUNK2_UN = CARSI_Y + 330, TRUNK2_HAM = CARSI_Y + 346, TRUNK2_OUT = CARSI_Y + 392;
-function pathDepotToCarsi(s, m) { const b = binPos(s, Object.keys(s.recipe).indexOf(m)); return [[620, DEPOT.y + DEPOT.h], [620, TRUNK2_IN], [b.x, TRUNK2_IN], [b.x, b.y + 8]]; }
-function pathInter(src, s, item, trunk) { const b = binPos(s, Object.keys(s.recipe).indexOf(item)), sx = src.x + 30; return [[sx, src.y + 92], [sx, trunk], [b.x, trunk], [b.x, b.y + 8]]; }
-function pathToCounter2(s) { const ox = s.x + 32, cx = crateX(s.out) + CRATE.w / 2; return [[ox, s.y + 92], [ox, TRUNK2_OUT], [cx, TRUNK2_OUT], [cx, COUNTER2.y - 12]]; }
+const TRUNK2_IN = CARSI_Y + 314, TRUNK2_UN = CARSI_Y + 330, TRUNK2_HAM = CARSI_Y + 346, TRUNK2_OUT = CARSI_Y + 370;
+function pathDepotToCarsi(s, m) { return [[695,DEPOT.y+DEPOT.h],[695,CARSI_Y+70],[695,TRUNK2_IN],[s.x-44,TRUNK2_IN],[s.x-44,s.y+58]]; }
+function pathInter(src, s, item, trunk) { const sx=src.x+30;return [[sx,src.y+92],[sx,trunk],[s.x+44,trunk],[s.x+44,s.y+58]]; }
+function pathToCounter2(s) { return outputPath(s,COUNTER2,TRUNK2_OUT); }
 // Çiftlikten ambara borular/bantlar: kaynak alanından yol boyunca kapıya, kapıdan duvar boyunca ambar kutusuna
 const depotIn = m => [[790, 440], [735, 440], [735, depotBinY(m)], [724, depotBinY(m)]];
 const FARM_LINES = {
-  pompa:{ m:'su', every:2.2, path:m => [[858, 334], [858, 440], ...depotIn(m)] },
-  kBant:{ m:'yumurta', every:3, path:m => [[1180, 330], [1110, 408], [960, 428], ...depotIn(m)] },
-  sagim:{ m:'sut', every:3.4, path:m => [[1200, 700], [1100, 620], [960, 428], ...depotIn(m)] },
+  pompa:{ m:'su', every:2.2, path:m => [[858,334],[820,334],[820,440],[735,440],[735,depotBinY(m)],[724,depotBinY(m)]] },
+  kBant:{ m:'yumurta', every:3, path:m => [[1180,330],[1110,330],[1110,420],[790,420],[748,420],[748,depotBinY(m)],[724,depotBinY(m)]] },
+  sagim:{ m:'sut', every:3.4, path:m => [[1200,700],[1200,744],[812,744],[812,452],[760,452],[760,depotBinY(m)],[724,depotBinY(m)]] },
 };
 const ridingTo = (dst, item) => riders.reduce((k, r) => k + (r.dst === dst && r.item === item), 0);
 function beltJob(id) {
@@ -1318,7 +1323,14 @@ function beltJob(id) {
 const BELT_IDS = ['bVitrin', 'bUn', 'bMill', 'bAmbar'];
 const CARSI_BELTS = ['cDepo', 'cUn', 'cHamur', 'cVitrin'];   // hepsi "Çarşı sevkiyatı" ile kurulur
 const beltOn = id => CARSI_BELTS.includes(id) ? !!(G.unlocked.bCarsi && G.unlocked.carsi) : !!G.unlocked[id];
+function normalizeTransit(raw){
+  if(!Array.isArray(raw))return [];
+  const ids=['bVitrin','bUn','bMill','bAmbar','cDepo','cUn','cHamur','cVitrin','pompa','kBant','sagim'];
+  return raw.slice(0,256).filter(r=>r&&ids.includes(r.line)&&(PRODUCTS[r.item]||MATS[r.item]||INTER[r.item])&&Number.isFinite(r.d)&&Array.isArray(r.path)&&r.path.length>=2&&r.path.length<=12&&r.path.every(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(p[0])&&Number.isFinite(p[1])&&p[0]>=0&&p[0]<=W&&p[1]>=0&&p[1]<=H)&&(r.dst==='counter'||r.dst==='stand'?!!PRODUCTS[r.item]:r.dst==='depot'?!!MATS[r.item]:!!ST[r.dst]?.recipe[r.item])).map(r=>{const path=r.path.map(p=>p.slice()),len=pathLen(path);return {line:r.line,item:r.item,dst:r.dst,path,len,d:Math.max(0,Math.min(len,r.d))};});
+}
+function ensureTransit(){if(riderGame===G)return;riders=normalizeTransit(G.transit);riderGame=G;}
 function updateBelts(dt) {
+  ensureTransit();
   const speedPx = 90 * (1 + .15 * G.lv.bHiz);
   for (const id of [...BELT_IDS, ...CARSI_BELTS, ...Object.keys(FARM_LINES)]) {
     if (!beltOn(id)) continue;
@@ -1404,44 +1416,145 @@ function openLogistics() {
   if (deskOpen) closeDesk();
   const routes=transportRoutes(),groups=new Map();
   routes.forEach((r,i)=>{if(!groups.has(r.line))groups.set(r.line,[]);groups.get(r.line).push([r,i]);});
-  modal('<h2>Otomatik sevkiyat</h2><p>Alınan bantlar çalışmaya devam eder. Malzemeler otomatik taşınır; yürüyüş alanı açık kalır.</p>'+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: yalnızca o yol 8 saniye görünür. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
+  modal('<h2>Otomatik sevkiyat</h2><p>Cam kapaklı bantlarda ürünler, borularda sıvılar, uzak teslimatlarda servis arabaları görünerek ilerler. Bir hatta dokunarak kaynağını ve hedefini inceleyebilirsin.</p>'+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: o yol 8 saniye vurgulanır. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
   modalEl.querySelectorAll('[data-route]').forEach(button=>button.onclick=()=>{selectedRoute=routes[Number(button.dataset.route)];selectedRouteUntil=time+8;closeModal();toast(ITEM_NAME(selectedRoute.item)+': '+selectedRoute.src+' → '+routeDestination(selectedRoute));});
 }
 function inView(x,y,pad=110) { return Math.abs(x-cam.x)<vw/(2*zoom)+pad && Math.abs(y-cam.y)<vh/(2*zoom)+pad; }
-function drawBeltGround() {
-  // Belirsiz küçük bant ağızları yerine kaynağı ve hedefi yazan servis tabelaları.
-  const signs=[];
-  if(beltOn('bMill'))signs.push([DEPOT.x+46,DEPOT.y-18,'Buğday → Değirmen','#d5b263']);
-  if(beltOn('bUn'))signs.push([ST.M.x,ST.M.y+112,'Un → Fırınlar','#e4d9b3']);
-  if(beltOn('bAmbar'))signs.push([DEPOT.x+46,DEPOT.y+DEPOT.h+20,'Malzeme → Fırınlar','#b9ce8a']);
-  if(beltOn('bVitrin'))signs.push([COUNTER.x+COUNTER.w/2,COUNTER.y-COUNTER.h-14,'Fırınlar → Vitrin'+(G.unlocked.stand?' / Kendin al':''),'#e8ac72']);
-  if(beltOn('cDepo'))signs.push([620,CARSI_Y+74,'Ambar → Çarşı','#b9ce8a']);
-  if(beltOn('cUn'))signs.push([ST.M2.x,ST.M2.y+112,'Un → Hamur','#e4d9b3']);
-  if(beltOn('cHamur'))signs.push([ST.H.x,ST.H.y+112,'Hamur → Fırınlar','#e4d9b3']);
-  if(beltOn('cVitrin'))signs.push([COUNTER2.x+COUNTER2.w/2,COUNTER2.y-COUNTER2.h-14,'Fırınlar → Çarşı vitrini','#e8ac72']);
-  for(const id in FARM_LINES)if(beltOn(id)){
-    const fl=FARM_LINES[id],a=fl.path(fl.m)[0],col=ITEM_COL(fl.m);
-    if(!inView(a[0],a[1]))continue;
-    ctx.save();ctx.translate(a[0],a[1]);
-    ctx.fillStyle='#293a35';rr(-15,-16,30,29,6);ctx.fillStyle='#a6b6a3';rr(-12,-13,24,22,4);
-    if(id==='pompa'||id==='sagim'){
-      ctx.strokeStyle=col;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-24,5);ctx.lineTo(-18,5);ctx.lineTo(-18,-2);ctx.lineTo(-10,-2);ctx.stroke();
-      ctx.save();ctx.rotate(time*2);ctx.strokeStyle='#344a48';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(7,0);ctx.moveTo(0,-7);ctx.lineTo(0,7);ctx.stroke();ctx.restore();
-    }else{ctx.fillStyle='#4b5543';rr(-9,-8,18,15,3);drawItem(0,0,'yumurta',.65);}
-    ctx.fillStyle=routeCount({line:id,dst:'depot',item:fl.m})?'#9ddd70':'#e6bd64';circ(10,-11,3);ctx.restore();
-    signs.push([a[0],a[1]+27,ITEM_NAME(fl.m)+' → Ambar',col]);
+// Hat geometrisi ve gövdeleri yalnızca kurulum değişince hazırlanır.
+const TRANSPORT_STYLE={raw:{color:'#92b8a1',bed:'#334b40',w:8},flour:{color:'#d5c795',bed:'#5a5140',w:8},dough:{color:'#deb68b',bed:'#66503e',w:8},goods:{color:'#d9ad68',bed:'#4b4334',w:11},water:{color:'#68b9dc',bed:'#335f72',w:6},milk:{color:'#e8e1c9',bed:'#758b85',w:6},eggs:{color:'#dec986',bed:'#62553a',w:9}};
+const transportKind=r=>r.line==='pompa'?'water':r.line==='sagim'?'milk':r.line==='kBant'?'eggs':['bUn','cUn'].includes(r.line)?'flour':r.line==='cHamur'?'dough':['bVitrin','cVitrin'].includes(r.line)?'goods':'raw';
+const cartRoute=r=>r.dst==='stand'||r.line==='cDepo';
+let networkArt=null,networkGame=null,networkRevision=-1,networkLight=null;
+function transportArt(){
+  if(networkGame===G&&networkRevision===geometryRevision&&networkLight===G.lightGraphics)return networkArt;
+  const groups=new Map(),carts=[],routes=transportRoutes();
+  for(const route of routes){
+    if(cartRoute(route)){carts.push(route);continue;}
+    const kind=transportKind(route);
+    for(let i=1;i<route.path.length;i++){
+      const a=route.path[i-1],b=route.path[i];if(a[0]===b[0]&&a[1]===b[1])continue;
+      const horizontal=a[1]===b[1],fixed=horizontal?a[1]:a[0],lo=horizontal?Math.min(a[0],b[0]):Math.min(a[1],b[1]),hi=horizontal?Math.max(a[0],b[0]):Math.max(a[1],b[1]);
+      const dir=horizontal?Math.sign(b[0]-a[0]):Math.sign(b[1]-a[1]);
+      const key=kind+':'+horizontal+':'+fixed+':'+dir;
+      if(!groups.has(key))groups.set(key,{kind,horizontal,fixed,dir,intervals:[]});groups.get(key).intervals.push([lo,hi]);
+    }
   }
-  for(const [x,y,text,col]of signs){
-    if(!inView(x,y,40))continue;
-    ctx.font=`800 ${Math.max(9,11/zoom)}px system-ui,sans-serif`;const w=ctx.measureText(text).width+16;
-    ctx.fillStyle='#16261fef';rr(x-w/2,y-10,w,20,5);ctx.fillStyle=col;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,x,y);
+  const segments=[];
+  for(const group of groups.values()){
+    const intervals=group.intervals.sort((a,b)=>a[0]-b[0]);let pair=null;
+    for(const range of intervals){if(pair&&range[0]<=pair[1]+.1)pair[1]=Math.max(pair[1],range[1]);else{pair=range.slice();segments.push({kind:group.kind,a:group.horizontal?[pair[0],group.fixed]:[group.fixed,pair[0]],b:null,pair,horizontal:group.horizontal,fixed:group.fixed,dir:group.dir});}}
   }
+  for(const seg of segments){const from=seg.dir>0?seg.pair[0]:seg.pair[1],to=seg.dir>0?seg.pair[1]:seg.pair[0];seg.a=seg.horizontal?[from,seg.fixed]:[seg.fixed,from];seg.b=seg.horizontal?[to,seg.fixed]:[seg.fixed,to];}
+  const canvas=document.createElement('canvas'),scale=G.lightGraphics?.75:1;canvas.width=Math.ceil(W*scale);canvas.height=Math.ceil(H*scale);const c=canvas.getContext('2d');c.scale(scale,scale);c.lineCap='round';c.lineJoin='round';
+  for(const seg of segments){
+    const style=TRANSPORT_STYLE[seg.kind],pipe=seg.kind==='water'||seg.kind==='milk',a=seg.a,b=seg.b;
+    const stroke=(width,color,dy=0)=>{c.strokeStyle=color;c.lineWidth=width;c.beginPath();c.moveTo(a[0],a[1]+dy);c.lineTo(b[0],b[1]+dy);c.stroke();};
+    stroke(style.w+4,'#2e362c55',2);stroke(style.w+3,pipe?'#3f5554':'#a7ad9b');stroke(style.w+1,style.bed);stroke(pipe?style.w-2:style.w-3,style.color+'66');
+    const len=Math.hypot(b[0]-a[0],b[1]-a[1]),dx=(b[0]-a[0])/len,dy=(b[1]-a[1])/len;
+    // İnce kaburgalar ve şeffaf güvenlik kapağı: zeminle aynı seviyede.
+    for(let d=8;d<len;d+=pipe?54:24){const x=a[0]+dx*d,y=a[1]+dy*d;c.strokeStyle=pipe?'#b3beb0':'#e8ecdb66';c.lineWidth=pipe?2:1;c.beginPath();c.moveTo(x-dy*(style.w/2),y+dx*(style.w/2));c.lineTo(x+dy*(style.w/2),y-dx*(style.w/2));c.stroke();}
+    stroke(1,pipe?'#f3fbff99':'#f4faf033',-style.w/3);
+    c.fillStyle=style.color;for(let d=34;d<len;d+=94){const x=a[0]+dx*d,y=a[1]+dy*d;c.save();c.translate(x,y);c.rotate(Math.atan2(dy,dx));c.beginPath();c.moveTo(2.5,0);c.lineTo(-2,-2);c.lineTo(-2,2);c.closePath();c.fill();c.restore();}
+  }
+  // Güvenli geçişler geniş ve zemine sıfır cam paneller olarak çizilir.
+  for(const oy of [0,CARSI_Y])for(const x of [268,508,652]){
+    const crossing=segments.some(s=>s.horizontal&&s.kind!=='water'&&s.kind!=='milk'&&s.fixed>=oy+290&&s.fixed<=oy+380&&Math.min(s.a[0],s.b[0])<x&&Math.max(s.a[0],s.b[0])>x);
+    if(!crossing)continue;
+    c.fillStyle='#d9e6da2b';c.beginPath();c.roundRect(x-13,oy+293,26,92,4);c.fill();c.strokeStyle='#f7fae377';c.lineWidth=1;c.stroke();
+    c.fillStyle='#b4c5b1';for(const y of [oy+294,oy+383]){c.fillRect(x-14,y,28,2);}
+  }
+  // Her istasyonda iki küçük renkli giriş ve bir paket çıkışı.
+  const ports=new Map();
+  for(const r of routes){if(cartRoute(r))continue;for(const a of [r.path[0],r.path[r.path.length-1]]){const key=a.join(':')+':'+transportKind(r);if(ports.has(key))continue;ports.set(key,{x:a[0],y:a[1],kind:transportKind(r)});}}
+  for(const p of ports.values()){const color=TRANSPORT_STYLE[p.kind].color;c.fillStyle='#3f5148';c.beginPath();c.roundRect(p.x-7,p.y-6,14,12,3);c.fill();c.fillStyle=color;c.fillRect(p.x-4,p.y-3,8,6);}
+  networkGame=G;networkRevision=geometryRevision;networkLight=G.lightGraphics;return networkArt={canvas,segments,ports:[...ports.values()],carts};
+}
+const payloadSprites=new Map();
+function payloadSprite(item){
+  if(payloadSprites.has(item))return payloadSprites.get(item);
+  const canvas=document.createElement('canvas');canvas.width=80;canvas.height=80;const previous=ctx;
+  try{ctx=canvas.getContext('2d');drawItem(40,53,item,1.6);}finally{ctx=previous;}
+  payloadSprites.set(item,canvas);return canvas;
+}
+function segmentVisible(a,b,pad=20){return Math.max(a[0],b[0])>cam.x-vw/(2*zoom)-pad&&Math.min(a[0],b[0])<cam.x+vw/(2*zoom)+pad&&Math.max(a[1],b[1])>cam.y-vh/(2*zoom)-pad&&Math.min(a[1],b[1])<cam.y+vh/(2*zoom)+pad;}
+function drawCargo(x,y,r,cart=false){
+  const style=TRANSPORT_STYLE[transportKind(r)],selected=selectedRoute&&time<selectedRouteUntil&&selectedRoute.line===r.line&&selectedRoute.item===r.item&&selectedRoute.dst===r.dst;
+  if(cart){
+    ctx.fillStyle='#17271d55';ell(x,y+5,15,5);ctx.fillStyle='#283e33';rr(x-13,y-5,26,13,4);ctx.fillStyle='#b7c6a4';rr(x-11,y-7,22,11,3);ctx.fillStyle='#344936';circ(x-8,y+7,3);circ(x+8,y+7,3);
+  }else if(transportKind(r)!=='water'&&transportKind(r)!=='milk'){
+    ctx.fillStyle='#2c302a55';rr(x-9,y-5,18,12,3);ctx.fillStyle='#f1e7c9';rr(x-8,y-7,16,11,3);ctx.fillStyle=style.color;ctx.fillRect(x-8,y+2,16,2);
+  }
+  if(['water','milk'].includes(transportKind(r))){ctx.fillStyle=style.color;ell(x,y,4.5,2.3);ctx.fillStyle='#fff9';circ(x-1,y-1,1.1);}
+  else ctx.drawImage(payloadSprite(r.item),x-14,y-24,28,28);
+  if(selected){ctx.strokeStyle=style.color;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,y-2,15,0,PI2);ctx.stroke();}
+}
+function drawWorldLayer(canvas){
+  const x=Math.max(0,cam.x-vw/(2*zoom)-4),y=Math.max(0,cam.y-vh/(2*zoom)-4),right=Math.min(W,cam.x+vw/(2*zoom)+4),bottom=Math.min(H,cam.y+vh/(2*zoom)+4),w=right-x,h=bottom-y;
+  if(w<=0||h<=0)return;const sx=canvas.width/W,sy=canvas.height/H;ctx.drawImage(canvas,x*sx,y*sy,w*sx,h*sy,x,y,w,h);
+}
+function drawBeltGround(){
+  const art=transportArt();drawWorldLayer(art.canvas);
+  for(const r of riders){if(cartRoute(r))continue;const [x,y]=pointOnPath(r.path,r.d);if(inView(x,y,30))drawCargo(x,y,r);}
+  drawNetworkLabels();
   if(selectedRoute&&time<selectedRouteUntil){
-    const path=selectedRoute.path;ctx.save();ctx.strokeStyle=ITEM_COL(selectedRoute.item);ctx.lineWidth=3;ctx.setLineDash([7,6]);ctx.lineDashOffset=-time*28;ctx.beginPath();path.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.setLineDash([]);
-    const len=pathLen(path);for(let d=(time*70)%80;d<len;d+=80){const [x,y]=pointOnPath(path,d),[nx,ny]=pointOnPath(path,Math.min(len,d+3));if(!inView(x,y,20))continue;ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(ny-y,nx-x));ctx.fillStyle=ITEM_COL(selectedRoute.item);ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-3,-4);ctx.lineTo(-3,4);ctx.fill();ctx.restore();}ctx.restore();
-    const a=path[0],b=path[path.length-1];txt(selectedRoute.src,a[0],a[1]-20,11,'#fff');txt(routeDestination(selectedRoute),b[0],b[1]-20,11,'#fff');
+    const path=selectedRoute.path;ctx.save();ctx.strokeStyle=TRANSPORT_STYLE[transportKind(selectedRoute)].color;ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.lineDashOffset=-time*26;ctx.beginPath();path.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.restore();
+    const a=path[0],b=path[path.length-1];drawTransportLabel('ÇIKIŞ · '+selectedRoute.src,a[0],a[1]-22,'#f3d39b');drawTransportLabel('VARIŞ · '+routeDestination(selectedRoute),b[0],b[1]-22,'#b7d6a0');
   }
 }
+function drawTransportLabel(label,x,y,color){if(!inView(x,y,60))return;ctx.font=`800 ${Math.max(8.5,10/zoom)}px system-ui,sans-serif`;const w=ctx.measureText(label).width+12;ctx.fillStyle='#263b31ed';rr(x-w/2,y-9,w,18,4);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x,y);}
+function drawNetworkLabels(){
+  for(const sh of G.unlocked.carsi?[0,1]:[0]){
+    const oy=sh*CARSI_Y;
+    if(beltOn(sh?'cDepo':'bAmbar')||!sh&&beltOn('bMill'))drawTransportLabel('01 · HAMMADDE',580,oy+299,'#b2d6b7');
+    if(beltOn(sh?'cUn':'bUn'))drawTransportLabel(sh?'02 · UN → HAMUR':'02 · UN → FIRIN',365,oy+318,'#e2d6a4');
+    if(sh&&beltOn('cHamur'))drawTransportLabel('03 · HAMUR',580,oy+338,'#e6bf99');
+    if(beltOn(sh?'cVitrin':'bVitrin'))drawTransportLabel('PAKET → SATIŞ',365,oy+(sh?370:356)+17,'#f0c78b');
+  }
+  for(const id in FARM_LINES)if(beltOn(id)){
+    const fl=FARM_LINES[id],a=fl.path(fl.m)[0],col=TRANSPORT_STYLE[transportKind({line:id})].color;
+    if(inView(a[0],a[1],35)){
+      ctx.fillStyle='#526c5c';rr(a[0]-13,a[1]-13,26,25,5);ctx.fillStyle='#c4d1bc';rr(a[0]-10,a[1]-10,20,19,4);ctx.save();ctx.translate(a[0],a[1]);ctx.rotate(time*2);ctx.strokeStyle='#355246';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(6,0);ctx.moveTo(0,-6);ctx.lineTo(0,6);ctx.stroke();ctx.restore();ctx.fillStyle=col;circ(a[0]+8,a[1]-9,3);
+    }
+    drawTransportLabel(ITEM_NAME(fl.m)+' → AMBAR',a[0],a[1]+26,col);
+  }
+  if(G.unlocked.bVitrin)drawTransportLabel('SATIŞ GİRİŞİ',COUNTER.x+COUNTER.w-12,COUNTER.y-30,'#f0c78b');
+}
+let workshopCache={game:null,revision:-1,theme:'',images:[]};
+function drawWorkshopGround(){
+  if(workshopCache.game!==G||workshopCache.revision!==geometryRevision||workshopCache.theme!==G.journal.theme)workshopCache={game:G,revision:geometryRevision,theme:G.journal.theme,images:[]};
+  for(const sh of G.unlocked.carsi?[0,1]:[0]){
+    const oy=sh*CARSI_Y;if(!segmentVisible([30,oy+108],[725,oy+394]))continue;
+    let canvas=workshopCache.images[sh];
+    if(!canvas){canvas=document.createElement('canvas');canvas.width=730;canvas.height=300;const old=ctx;try{ctx=canvas.getContext('2d');ctx.translate(0,-oy-100);paintWorkshopGround(sh);}finally{ctx=old;}workshopCache.images[sh]=canvas;}
+    ctx.drawImage(canvas,0,oy+100,730,300);
+  }
+}
+function paintWorkshopGround(workshopSh){
+  const theme=shopTheme();
+  for(const sh of [workshopSh]){
+    const oy=sh*CARSI_Y;
+    ctx.fillStyle='#bdb29c';rr(30,oy+112,695,274,12);ctx.fillStyle='#d7ccb5';rr(33,oy+115,689,268,10);
+    ctx.strokeStyle='#f7edda44';ctx.lineWidth=1;ctx.beginPath();for(let x=50;x<720;x+=40){ctx.moveTo(x,oy+116);ctx.lineTo(x,oy+382);}for(let y=oy+136;y<oy+380;y+=40){ctx.moveTo(34,y);ctx.lineTo(722,y);}ctx.stroke();
+    for(const st of STATIONS)if(st.shop===sh&&active(st)){
+      ctx.fillStyle='#9b927e55';rr(st.x-51,st.y-42,104,171,10);ctx.fillStyle='#f2e9d5';rr(st.x-52,st.y-45,104,170,10);ctx.strokeStyle=theme.accent;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(st.x-52,st.y-45,104,170,10);ctx.stroke();
+      ctx.fillStyle=theme.dark;rr(st.x-45,st.y+108,90,15,4);ctx.font='800 8px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff3d6';ctx.fillText(st.kind==='mill'?'DEĞİRMEN':st.kind==='prep'?'HAMUR TEZGAHI':ITEM_NAME(st.out).toLocaleUpperCase('tr-TR'),st.x,st.y+115);
+    }
+    ctx.fillStyle='#d8ccad';rr(36,oy+387,680,7,3);ctx.fillStyle='#354d41';ctx.font='800 9px system-ui,sans-serif';ctx.textAlign='left';ctx.fillText('ATÖLYE',40,oy+104);ctx.textAlign='right';ctx.fillText('ŞEFFAF KAPAKLI HATLAR · YAYA GEÇİŞİ',711,oy+104);
+  }
+}
+function inspectTransportAt(x,y){
+  let best=null,nearest=13*13;
+  const routes=transportRoutes();
+  for(const rider of riders){const p=pointOnPath(rider.path,rider.d),dist=(x-p[0])**2+(y-p[1])**2;if(dist<18*18){const route=routes.find(r=>r.line===rider.line&&r.dst===rider.dst&&r.item===rider.item);if(route){best=route;nearest=-1;break;}}}
+  for(const route of routes)for(let i=1;i<route.path.length;i++){
+    const a=route.path[i-1],b=route.path[i],dx=b[0]-a[0],dy=b[1]-a[1],d=dx*dx+dy*dy;if(!d)continue;const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/d)),px=a[0]+t*dx,py=a[1]+t*dy,dist=(x-px)**2+(y-py)**2;
+    if(dist<nearest){best=route;nearest=dist;}
+  }
+  if(!best)return false;selectedRoute=best;selectedRouteUntil=time+12;
+  const color=TRANSPORT_STYLE[transportKind(best)].color;
+  modal(`<h2>${ITEM_NAME(best.item)} hattı</h2><p style="color:${color};font-size:17px;font-weight:800">${best.src} → ${routeDestination(best)}</p><p>${routeStatus(best)}</p><p class="note">${cartRoute(best)?'Bu teslimatı küçük servis arabaları taşır.':transportKind(best)==='water'||transportKind(best)==='milk'?'Sıvı, renkli boruda görünür darbelerle ilerler.':'Ürünler cam kapaklı, zemine gömülü bantta görünerek ilerler. Kapakların üzerinden güvenle yürüyebilirsin.'}</p>`,[['Hattı izle','pri',closeModal],['Tüm bağlantılar','',openLogistics]]);return true;
+}
+
 
 /* ================= Müşteriler ve talep ================= */
 // Haftalık etkinlikler: haftanın belli günlerinde bazı ürünler çok aranır, müşteri sıklaşır
@@ -2483,10 +2596,10 @@ let joy = null; const keys = {};
 cv.addEventListener('pointerdown', e => {
   if (joy || paused) return;
   cv.setPointerCapture(e.pointerId);
-  joy = { id:e.pointerId, ox:e.offsetX, oy:e.offsetY, x:e.offsetX, y:e.offsetY };
+  joy = { id:e.pointerId, ox:e.offsetX, oy:e.offsetY, x:e.offsetX, y:e.offsetY, at:performance.now() };
 });
 cv.addEventListener('pointermove', e => { if (joy && e.pointerId === joy.id) { joy.x = e.offsetX; joy.y = e.offsetY; } });
-const endJoy = e => { if (joy && e.pointerId === joy.id) joy = null; };
+const endJoy = e => { if (joy && e.pointerId === joy.id) { const tap=e.type==='pointerup'&&Math.hypot(joy.x-joy.ox,joy.y-joy.oy)<7&&performance.now()-joy.at<350; const x=cam.x+(e.offsetX-vw/2)/zoom,y=cam.y+(e.offsetY-vh/2)/zoom;joy=null;if(tap)inspectTransportAt(x,y); } };
 cv.addEventListener('pointerup', endJoy); cv.addEventListener('pointercancel', endJoy);
 cv.addEventListener('contextmenu', e => e.preventDefault());
 // e.code klavye düzeninden bağımsızdır: Türkçe klavyede ve Caps Lock açıkken de WASD çalışır
@@ -3406,7 +3519,8 @@ function render() {
   cam.y = H < hh * 2 ? H / 2 : Math.max(hh, Math.min(H - hh, P.y - 30 + (deskOpen ? hh * .45 : 0)));
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#120e0b'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(k, 0, 0, k, (vw / 2 - cam.x * zoom) * dpr, (vh / 2 - cam.y * zoom) * dpr);
-  ctx.drawImage(floor, 0, 0, W, H);
+  drawWorldLayer(floor);
+  drawWorkshopGround();
   if (G.unlocked.cafe) {
     ctx.fillStyle = ({classic:'#78563544',sage:'#557b5144',rose:'#ab687d44'})[G.decor];
     rr(385,550,220,310,14);
@@ -3434,7 +3548,7 @@ function render() {
   ctx.fillStyle = `rgba(214,160,90,${inDepot(P) ? .35 : .15})`; rr(DEPOT.x, DEPOT.y, DEPOT.w, DEPOT.h, 8);
   ctx.strokeStyle = `rgba(232,180,110,${dg + .2})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(DEPOT.x, DEPOT.y, DEPOT.w, DEPOT.h, 8); ctx.stroke();
   drawBeltGround();
-  drawBoard(0); if (G.unlocked.carsi) drawBoard(1);
+  // Üretim bilgisi artık istasyon kartlarında ve üst bilgi alanında.
   if (ORDER) { const nearB = dist2(P, BASKET.x, BASKET.y) < (BASKET.r + 8) ** 2; ctx.strokeStyle = nearB ? 'rgba(242,181,68,.9)' : 'rgba(242,181,68,.45)'; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.beginPath(); ctx.arc(BASKET.x, BASKET.y, BASKET.r, 0, PI2); ctx.stroke(); ctx.setLineDash([]); }
   for (const a of AREAS) drawAreaLock(a);
   txt('Çiftlik', SHOP_W + 40, DOOR.top - 14, 11, '#f7efe2');
@@ -3474,6 +3588,7 @@ function render() {
   if (G.unlocked.garson) L.push([GAR.y, drawGarson]);
   if (G.unlocked.kalfa && KALFA.st) L.push([KALFA.y, drawKalfa]);
   if (ORDER) { L.push([BASKET.y + 6, drawBasket]); L.push([VIP_POS.y, drawVip]); }
+  for(const rider of riders)if(cartRoute(rider)){const [x,y]=pointOnPath(rider.path,rider.d);if(inView(x,y,35))L.push([y,()=>drawCargo(x,y,rider,true)]);}
   // fırıncı da malzemeyi önünde ittiği el arabasında taşır (araba arkada kalıyorsa önce o çizilir)
   L.push([P.y, () => {
     if (!G.carry.length) { drawBaker(P); return; }
@@ -3776,6 +3891,7 @@ const HOW = `<ol>
   <li><b>Kafe:</b> açınca misafirler masalara oturur. İstedikleri ürünü masanın yanına götür; yiyip öderler ve masayı kirli bırakırlar. Kirli masanın yanında durarak sil. <b>Garson</b> tutarsan bunları o yapar.</li>
   <li><b>Fazla ürün tezgahı:</b> vitrin dolunca fırında biriken ürünleri ön kapının yanındaki tezgaha koy (çırak da koyar). Sokaktan gelenler kendileri alıp parasını bırakır.</li>
   <li><b>Köy panosu</b>: süre sınırı olmayan siparişler al, müdavimlerini tanı, ürün ustalığı rozetleri ve tasarım temaları kazan.</li>
+  <li><b>Görünür taşıma</b>: ürünler cam kapaklı bantlarda, sıvılar ayrı borularda ilerler. Uzak teslimatları küçük arabalar taşır. Bir hatta kısa dokunarak inceleyebilirsin.</li>
   <li><b>Akış</b>: otomatik sevkiyatların kaynağını, hedefini ve yoldaki miktarı gösterir. Bir bağlantıya dokununca yalnızca o yol kısa süre haritada görünür.</li>
   <li><b>Çiftlik makineleri</b> (usta masası → Çiftlik): su pompası, yumurta toplama ve sağım makinesi hammaddeyi kendiliğinden ambara getirir; traktör ve biçerdöver buğdayı biçer.</li>
   <li><b>Yeni arazi:</b> çiftliğin güneyindeki çit kapısından geçilir: arı kovanları (bal), fındık bahçesi, zeytinlik ve biçerdöverle büyük buğday tarlası.</li>
@@ -3938,6 +4054,7 @@ function frame(now) {
 function start(data) {
   G = normalize(data && data.G) || load() || fresh();
   ORDER = G.order;
+  ensureTransit();
   P.x = G.px; P.y = G.py; collide(P, 12);
   if (G.unlocked.car) addCarrier(0);
   if (G.unlocked.car2) addCarrier(1);
