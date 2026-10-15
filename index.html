@@ -187,7 +187,7 @@ const $ = s => document.querySelector(s);
 const cv = $('#cv'), app = $('#app');
 let ctx = cv.getContext('2d');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v18';
+const GAME_VERSION = 'v19';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -309,13 +309,13 @@ const OFFERS = [
   { id:'ates',  where:'desk', tab:'shop', up:true, base:60,  mul:2.1, max:6, req:null,   label:'Odun ateşi', desc:() => 'Değirmen ve bütün fırınlar %18 daha hızlı çalışır' },
   { id:'vitrin',where:'desk', tab:'shop', up:true, base:35,  mul:1.9, max:6, req:null,   label:'Vitrin',     desc:() => `Her vitrin bölmesi ${crateCap()} → ${crateCap() + 4} ürün alır` },
   { id:'kutu',  where:'desk', tab:'shop', up:true, base:50,  mul:1.9, max:6, req:null,   label:'Malzeme kutuları', desc:() => `İstasyonların önündeki her kutu ${binCap()} → ${binCap() + 3} malzeme alır` },
-  { id:'tepsi', where:'desk', tab:'shop', up:true, base:45,  mul:1.9, max:5, req:null,   label:'Tepsiler',   desc:() => `İstasyon tepsileri ${outMax()} → ${outMax() + 3} ürün alır` },
+  { id:'tepsi', where:'desk', tab:'shop', up:true, base:45,  mul:1.9, max:5, req:null,   label:'Ürün kasaları',   desc:() => `İstasyon kasaları ${outMax()} → ${outMax() + 3} ürün alır` },
   { id:'masa',  where:'desk', tab:'shop', up:true, base:900, mul:2, max:4, req:'cafe', label:'Kafe alanını genişlet', desc:() => `Kafedeki masa sayısı ${2 + G.lv.masa} → ${3 + G.lv.masa}` },
   { id:'garsonSpd', where:'desk', tab:'staff', up:true, base:300, mul:2, max:5, req:'garson', label:'Garson hızı', desc:() => 'Garson %12 daha hızlı yürür' },
   { id:'ambar', where:'desk', tab:'shop', up:true, base:40,  mul:1.9, max:6, req:null,   label:'Ambar',      desc:() => `Ambardaki her kutu ${depotCap()} → ${depotCap() + 10} hammadde alır` },
   // Bantlar: taşımayı otomatikleştirir; talebi olan istasyona/ürüne öncelik verir (optional: HUD'daki sıradaki hedefte görünmez)
-  { id:'bVitrin', where:'desk', tab:'belt', optional:true, cost:1200, req:'car', label:'Ürün sevkiyatı',
-    desc:'Fırın → Vitrin / Kendin al. Ürünler otomatik sevk edilir; Akış ekranından hedefi izleyebilirsin.' },
+  { id:'bVitrin', where:'desk', tab:'belt', optional:true, cost:1200, req:'car', label:'Sevkiyat arabası',
+    desc:'İlk tekerlekli sevkiyat aracı: 24 ürün kapasiteli. Fırın kasaları → Vitrin / Kendin al. Çıraklar üretim ve temizliğe geçer.' },
   { id:'bMill',   where:'desk', tab:'belt', optional:true, cost:1500, req:'coop', label:'Buğday sevkiyatı',
     desc:'Ambardaki buğdayı değirmenin kutusuna taşır.' },
   { id:'bUn',     where:'desk', tab:'belt', optional:true, cost:2200, req:'S3', label:'Un dağıtımı',
@@ -324,8 +324,11 @@ const OFFERS = [
     desc:'Ambardaki su, yumurta, süt ve çileği talebi olan fırınlara taşır.' },
   { id:'bCarsi',  where:'desk', tab:'belt', optional:true, cost:6000, req:'carsi', label:'Çarşı sevkiyatı',
     desc:'Ambardan Çarşı şubesine malzeme taşır; şubede değirmenden hamur tezgahına un, tezgahtan fırınlara hamur, fırınlardan vitrine ürün akar.' },
-  { id:'bHiz',    where:'desk', tab:'belt', up:true, base:300, mul:2, max:5, req:'bVitrin', label:'Sevkiyat hızı',
+  { id:'bHiz',    where:'desk', tab:'belt', up:true, base:300, mul:2, max:5, req:'bVitrin', label:'Otomasyon temposu',
     desc:() => `Bantlar ${sec(beltInt())} → ${sec(beltInt(G.lv.bHiz + 1))} sn'de bir eşya gönderir` },
+  { id:'robotCount',where:'desk',tab:'belt',up:true,base:2200,mul:2,max:3,req:'bVitrin',label:'Ek sevkiyat arabası',desc:()=>`Araç sayısı ${courierCount()} → ${courierCount()+1}; her araç ${courierCapacity()} ürün taşır` },
+  { id:'robotSpeed',where:'desk',tab:'belt',up:true,base:600,mul:1.8,max:5,req:'bVitrin',label:'Sevkiyat motoru',desc:()=>`Araç hızı ${Math.round(courierSpeed())} → ${Math.round(courierSpeed(G.lv.robotSpeed+1))}; her seviye %7 artış` },
+  { id:'robotCap',where:'desk',tab:'belt',up:true,base:900,mul:2,max:3,req:'bVitrin',label:'Sevkiyat kasası',desc:()=>`Araç başına ${courierCapacity()} → ${courierCapacity()+8} ürün` },
   // Çalışan geliştirmeleri
   { id:'cashSpd', where:'desk', tab:'staff', up:true, base:80,  mul:2,   max:6, req:'cash', label:'Kasiyer hızı',
     desc:() => `Ürün başına ${sec(cashierInt())} → ${sec(cashierInt(G.lv.cashSpd + 1))} sn (sen 0,2 sn)` },
@@ -345,9 +348,10 @@ const DROP     = { x:205, y:402, w:240, h:44 };          // yeşil alan: ürün�
 const CASHPILE = { x:178, y:362 };
 const DESK     = { x:100, y:640 };
 const DESK_ZONE = { x:100, y:692, r:34 };
-const DEPOT    = { x:612, y:476, w:72, h:384 };          // ambar: hammadde bırakma/alma alanı (on kutu)
+const DEPOT    = { x:606, y:492, w:40, h:238 };          // ambar: hammadde bırakma/alma alanı (on kutu)
 const BIN_COL_X = 707;                                   // ambar kutuları sağ duvar boyunca dikey
-const depotBinY = m => DEPOT.y + 8 + MAT_ORDER.indexOf(m) * 38 + 17;
+const depotBinPos = m => {const i=Math.max(0,MAT_ORDER.indexOf(m));return {x:666+(i%2)*38,y:532+Math.floor(i/2)*38};};
+const depotBinY = m => depotBinPos(m).y;
 const DOOR     = { y:420, top:380, bot:460, outX:800 };
 const SHOP_EDGE = 746, LANE_X = 712;
 const CORRIDOR = { x:640, y:400 };                       // dükkanın alt-sağı (ambar) ile üst iş alanı arasındaki geçiş
@@ -365,7 +369,7 @@ const STATIC_BOX = [
   { x:34,  y:800, w:60, h:44 },                          // odun yığını
   { x:COUNTER.x, y:COUNTER.y, w:COUNTER.w, h:COUNTER.d },
   { x:DESK.x - 42, y:DESK.y - 34, w:84, h:30 },          // usta masası
-  { x:BIN_COL_X - 18, y:DEPOT.y, w:40, h:DEPOT.h },      // ambar kutuları
+  { x:648, y:500, w:78, h:216 },      // ambar kutuları
   { x:728, y:0,   w:36, h:DOOR.top },                    // sağ duvar
   { x:728, y:DOOR.bot, w:36, h:H - DOOR.bot },
   { x:1300, y:160, w:76, h:52 },                         // kümes kulübesi
@@ -422,7 +426,7 @@ const freshSt = () => ({
 const freshBranch = () => ({ stock:zeroProducts(), till:0, sold:0 });
 const fresh = () => ({ transit:[], journal:freshJournal(), money:0, cash:0, cash2:0, unlocked:{}, paid:{}, hinted:{}, learned:{}, music:true, chatter:true,
   lv:{ spd:0, cap:0, ates:0, cashSpd:0, carSpd:0, gatSpd:0, vitrin:0, kutu:0, tepsi:0, orak:0, kova:0, sepet:0, kurek:0, ambar:0, bHiz:0, masa:0, garsonSpd:0,
-    standUp:0, trSpd:0, vanCap:0, mudur:0 },
+    standUp:0, trSpd:0, vanCap:0, mudur:0, robotCount:0, robotSpeed:0, robotCap:0 },
   counter:zeroProducts(), st:freshSt(), depot:Object.assign(Object.fromEntries(MAT_ORDER.map(m => [m, 0])), { bugday:4, su:2 }), carry:[], px:340, py:330, sound:true, intro:false, sold:0,
   day:1, dayT:0, rep:2.5, best:0, today:{ sold:0, earned:0, angry:0 }, stats:Object.assign(zeroProducts(), { orders:0, cafe:0, trips:0 }), quests:{}, order:null, orderCD:60, beltPri:'auto', workerPri:'auto', standMode:'balanced', viewScale:1, decor:'classic',
   xp:{ car0:0, car1:0, car2:0, gat0:0, gat1:0, cash:0, cash2:0, gar:0 },
@@ -509,6 +513,7 @@ function normalize(d) {
   if (!['classic','sage','rose'].includes(out.decor)) out.decor = 'classic';
   out.transit = normalizeTransit(d.transit);
   out.journal = normalizeJournal(d.journal);
+  for(const [key,max]of [['robotCount',3],['robotSpeed',5],['robotCap',3]])out.lv[key]=Math.max(0,Math.min(max,Math.floor(out.lv[key]||0)));
   out.lightGraphics = out.lightGraphics === true;
   out.viewScale = Number.isFinite(out.viewScale) ? Math.max(.6,Math.min(1.3,out.viewScale)) : 1;
   return out;
@@ -980,7 +985,7 @@ function collide(e, r) {
 const regionOf = (x, y) => x >= SHOP_EDGE ? 'farm' : y < 445 ? 'top' : y < 880 ? 'low' : y < CARSI_Y + 50 ? 'street' : 'carsi';
 const PORTALS = {
   'top>farm':[[LANE_X, DOOR.y], [DOOR.outX, DOOR.y]], 'farm>top':[[DOOR.outX, DOOR.y], [LANE_X, DOOR.y]],
-  'top>low':[[CORRIDOR.x, CORRIDOR.y], [660, 530]],   'low>top':[[660, 530], [CORRIDOR.x, CORRIDOR.y]],
+  'top>low':[[CORRIDOR.x, CORRIDOR.y], [626, 540]],   'low>top':[[626, 540], [CORRIDOR.x, CORRIDOR.y]],
   'low>street':[[300, 862], [300, STREET_Y]],          'street>low':[[300, STREET_Y], [300, 862]],
   'street>carsi':[[700, STREET_Y], [700, CARSI_Y + 120]], 'carsi>street':[[700, CARSI_Y + 120], [700, STREET_Y]],
 };
@@ -1200,7 +1205,7 @@ function playerDepot(dt) {
   if (P.depMode === 'drop') {
     for (let i = G.carry.length - 1; i >= 0; i--) {
       const m = G.carry[i];
-      if (MATS[m] && depotRoom(m)) { G.carry.splice(i, 1); G.depot[m]++; fly('item', m, cp(P).x, cp(P).y, BIN_COL_X, depotBinY(m) - 6, .22); sfx('drop'); return; }
+      if (MATS[m] && depotRoom(m)) { G.carry.splice(i, 1); G.depot[m]++; fly('item', m, cp(P).x, cp(P).y, depotBinPos(m).x, depotBinY(m) - 6, .22); sfx('drop'); return; }
     }
     if (G.carry.some(t => MATS[t])) P.depotFull = true;   // kalan varsa kutusu dolu
     return;
@@ -1212,7 +1217,7 @@ function playerDepot(dt) {
     const lack = needFor(m) - G.carry.filter(x => x === m).length;
     if (lack > 0 && matPriority(m) * lack > bs) { bs = matPriority(m) * lack; best = m; }
   }
-  if (best) { G.depot[best]--; G.carry.push(best); fly('item', best, BIN_COL_X, depotBinY(best) - 6, cp(P).x, cp(P).y, .22); sfx('pick'); }
+  if (best) { G.depot[best]--; G.carry.push(best); fly('item', best, depotBinPos(best).x, depotBinY(best) - 6, cp(P).x, cp(P).y, .22); sfx('pick'); }
 }
 // Elindekileri bırak: hammadde ambara, un değirmene, ürün kendi fırınına döner
 function dumpCarry() {
@@ -1221,7 +1226,7 @@ function dumpCarry() {
     const t = G.carry[i], y0 = cp(P).y;
     const home = INTER[t] ? producerOf(t, t === 'un' && P.y < CARSI_Y ? 0 : 1) : OVENS.find(s => s.out === t);
     if (home) { G.st[home.id].out++; const z = zoneOf(home); fly('item', t, cp(P).x, y0, z.x, z.y - 4, .35 + i * .03); }
-    else if (MATS[t] && depotRoom(t)) { G.depot[t]++; fly('item', t, cp(P).x, y0, BIN_COL_X, depotBinY(t) - 6, .45 + i * .03); }
+    else if (MATS[t] && depotRoom(t)) { G.depot[t]++; fly('item', t, cp(P).x, y0, depotBinPos(t).x, depotBinY(t) - 6, .45 + i * .03); }
     else chips(P.x, P.y - 20, MATS[t] ? MATS[t].bit : '#fff', 3);
   }
   G.carry = []; sfx('drop'); toast('Elindekileri bıraktın');
@@ -1254,9 +1259,9 @@ function pathToCounter2(s) { return outputPath(s,COUNTER2,TRUNK2_OUT); }
 // Çiftlikten ambara borular/bantlar: kaynak alanından yol boyunca kapıya, kapıdan duvar boyunca ambar kutusuna
 const depotIn = m => [[790, 440], [735, 440], [735, depotBinY(m)], [724, depotBinY(m)]];
 const FARM_LINES = {
-  pompa:{ m:'su', every:2.2, path:m => [[858,334],[820,334],[820,440],[735,440],[735,depotBinY(m)],[724,depotBinY(m)]] },
-  kBant:{ m:'yumurta', every:3, path:m => [[1180,330],[1110,330],[1110,420],[790,420],[748,420],[748,depotBinY(m)],[724,depotBinY(m)]] },
-  sagim:{ m:'sut', every:3.4, path:m => [[1200,700],[1200,744],[812,744],[812,452],[760,452],[760,depotBinY(m)],[724,depotBinY(m)]] },
+  pompa:{ m:'su', every:2.2, path:m => [[858,334],[820,334],[820,440],[735,440],[735,depotBinY(m)],[depotBinPos(m).x,depotBinY(m)]] },
+  kBant:{ m:'yumurta', every:3, path:m => [[1180,330],[1110,330],[1110,420],[790,420],[748,420],[748,depotBinY(m)],[depotBinPos(m).x,depotBinY(m)]] },
+  sagim:{ m:'sut', every:3.4, path:m => [[1200,700],[1200,744],[812,744],[812,452],[760,452],[760,depotBinY(m)],[depotBinPos(m).x,depotBinY(m)]] },
 };
 const ridingTo = (dst, item) => riders.reduce((k, r) => k + (r.dst === dst && r.item === item), 0);
 function beltJob(id) {
@@ -1323,7 +1328,7 @@ const beltOn = id => CARSI_BELTS.includes(id) ? !!(G.unlocked.bCarsi && G.unlock
 function normalizeTransit(raw){
   if(!Array.isArray(raw))return [];
   const ids=['bVitrin','bUn','bMill','bAmbar','cDepo','cUn','cHamur','cVitrin','pompa','kBant','sagim'];
-  return raw.slice(0,256).filter(r=>r&&ids.includes(r.line)&&(PRODUCTS[r.item]||MATS[r.item]||INTER[r.item])&&Number.isFinite(r.d)&&Array.isArray(r.path)&&r.path.length>=2&&r.path.length<=12&&r.path.every(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(p[0])&&Number.isFinite(p[1])&&p[0]>=0&&p[0]<=W&&p[1]>=0&&p[1]<=H)&&(r.dst==='counter'||r.dst==='stand'?!!PRODUCTS[r.item]:r.dst==='depot'?!!MATS[r.item]:!!ST[r.dst]?.recipe[r.item])).map(r=>{const path=r.path.map(p=>p.slice()),len=pathLen(path);return {line:r.line,item:r.item,dst:r.dst,path,len,d:Math.max(0,Math.min(len,r.d))};});
+  return raw.slice(0,2048).filter(r=>r&&ids.includes(r.line)&&(PRODUCTS[r.item]||MATS[r.item]||INTER[r.item])&&Number.isFinite(r.d)&&Array.isArray(r.path)&&r.path.length>=2&&r.path.length<=12&&r.path.every(p=>Array.isArray(p)&&p.length===2&&Number.isFinite(p[0])&&Number.isFinite(p[1])&&p[0]>=0&&p[0]<=W&&p[1]>=0&&p[1]<=H)&&(r.dst==='counter'||r.dst==='stand'?!!PRODUCTS[r.item]:r.dst==='depot'?!!MATS[r.item]:!!ST[r.dst]?.recipe[r.item])).map(r=>{const path=r.path.map(p=>p.slice()),len=pathLen(path);return {line:r.line,item:r.item,dst:r.dst,path,len,d:Math.max(0,Math.min(len,r.d))};});
 }
 function ensureTransit(){if(riderGame===G)return;riders=normalizeTransit(G.transit);riderGame=G;}
 function updateBelts(dt) {
@@ -1331,7 +1336,7 @@ function updateBelts(dt) {
   const speedPx = 90 * (1 + .15 * G.lv.bHiz);
   for (const id of [...BELT_IDS, ...CARSI_BELTS, ...Object.keys(FARM_LINES)]) {
     if (!beltOn(id)) continue;
-    if(['bVitrin','cVitrin'].includes(id)&&riders.filter(byCourier).length>=24)continue;
+    if(['bVitrin','cVitrin'].includes(id)&&riders.filter(byCourier).length>=Math.max(48,courierCapacity()*Math.max(1,courierCount())*2))continue;
     const every = FARM_LINES[id] ? FARM_LINES[id].every : beltInt();
     beltT[id] = Math.min(every, (beltT[id] || 0) + dt);
     if (beltT[id] < every) continue;
@@ -1409,7 +1414,7 @@ function openLogistics() {
   if (deskOpen) closeDesk();
   const routes=transportRoutes(),groups=new Map();
   routes.forEach((r,i)=>{if(!groups.has(r.line))groups.set(r.line,[]);groups.get(r.line).push([r,i]);});
-  modal('<h2>Otomatik sevkiyat</h2><p>Makine çıkışlarında kısa bantlar vardır. Tek servis arabası en fazla 10 hazır ürünü bir turda toplar ve vitrine ya da kendin al tezgâhına bırakır. Hammadde otomasyonu çalışmaya devam eder; uzun hatlar yalnızca burada seçildiğinde gösterilir.</p>'+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: o yol 8 saniye vurgulanır. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
+  modal(`<h2>Otomatik sevkiyat</h2><p>Fırınların yanında ürün kasaları vardır. ${courierCount()} tekerlekli araç, araç başına ${courierCapacity()} hazır ürünü bir turda toplar ve vitrine ya da kendin al tezgâhına bırakır. Hammadde otomasyonu çalışmaya devam eder; uzun hatlar yalnızca burada seçildiğinde gösterilir.</p>`+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: o yol 8 saniye vurgulanır. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
   modalEl.querySelectorAll('[data-route]').forEach(button=>button.onclick=()=>{selectedRoute=routes[Number(button.dataset.route)];selectedRouteUntil=time+8;closeModal();toast(ITEM_NAME(selectedRoute.item)+': '+selectedRoute.src+' → '+routeDestination(selectedRoute));});
 }
 function inView(x,y,pad=110) { return Math.abs(x-cam.x)<vw/(2*zoom)+pad && Math.abs(y-cam.y)<vh/(2*zoom)+pad; }
@@ -1441,6 +1446,10 @@ function drawWorldLayer(canvas){
   if(w<=0||h<=0)return;const sx=canvas.width/W,sy=canvas.height/H;ctx.drawImage(canvas,x*sx,y*sy,w*sx,h*sy,x,y,w,h);
 }
 const courier={x:540,y:530,fx:1,fy:0,phase:0,moving:false,plan:[],cargo:[],wait:0,game:null,trips:0};
+const couriers=[courier];let courierFleetGame=null;
+const courierCount=()=>G.unlocked.bVitrin||G.unlocked.bCarsi&&G.unlocked.carsi?1+G.lv.robotCount:0;
+const courierCapacity=()=>24+8*G.lv.robotCap;
+const courierSpeed=(level=G.lv.robotSpeed)=>Math.min(320,Math.max(150,...carriers.map(n=>carSpd(n)*1.12))*(1+.07*level));
 const byCourier=r=>r.line==='bVitrin'||r.line==='cVitrin';
 function deliverTransport(r){
   if(r.dst==='stand'){if(standTotal()<standCap())G.stand[r.item]++;else{const oven=OVENS.find(s=>s.out===r.item);G.st[oven.id].out++;}}
@@ -1449,40 +1458,42 @@ function deliverTransport(r){
   else G.st[r.dst].bins[r.item]++;
 }
 function updateCourier(dt){
-  if(courier.game!==G){Object.assign(courier,{x:540,y:530,plan:[],cargo:[],wait:0,game:G,via:null,moving:false});for(const r of riders)if(byCourier(r)){r.stage='queued';r.d=0;}}
-  if(!courier.plan.length){
+  const count=courierCount();
+  if(courierFleetGame!==G){courierFleetGame=G;couriers.length=1;Object.assign(courier,{x:540,y:535,home:{x:540,y:535},plan:[],cargo:[],wait:0,via:null,moving:false});for(const r of riders)if(byCourier(r)){r.stage='queued';r.d=0;}}
+  while(couriers.length<count){const i=couriers.length,x=540+(i%2)*34,y=535+Math.floor(i/2)*30;couriers.push({id:i,x,y,home:{x,y},fx:1,fy:0,phase:0,moving:false,plan:[],cargo:[],wait:0,trips:0});}
+  for(let i=0;i<count;i++)updateOneCourier(couriers[i],dt);
+}
+function updateOneCourier(bot,dt){
+  if(!bot.plan.length){
     const pending=riders.filter(r=>byCourier(r)&&!r.stage);for(const r of pending)r.stage='queued';
     const queued=riders.filter(r=>byCourier(r)&&r.stage==='queued');
-    if(!queued.length){courier.moving=false;courier.wait=0;return;}
-    courier.wait+=dt;if(courier.wait<1.4&&queued.length<6)return;courier.wait=0;
-    const shop=queued[0].path[0][1]>=CARSI_Y?1:0,batch=queued.filter(r=>(r.path[0][1]>=CARSI_Y?1:0)===shop).slice(0,10);
+    if(!queued.length){bot.wait=0;walk(bot,bot.home.x,bot.home.y,courierSpeed(),dt);return;}
+    bot.wait+=dt;if(bot.wait<1.4&&queued.length<6)return;bot.wait=0;
+    const shop=queued[0].path[0][1]>=CARSI_Y?1:0,batch=queued.filter(r=>(r.path[0][1]>=CARSI_Y?1:0)===shop).slice(0,courierCapacity());
     const pickups=new Map(),drops=new Map();
     for(const r of batch){r.stage='assigned';const a=r.path[0],b=r.path[r.path.length-1],key=a.join(':'),dest=b.join(':');if(!pickups.has(key))pickups.set(key,{x:a[0],y:a[1],kind:'pickup',items:[]});pickups.get(key).items.push(r);if(!drops.has(dest))drops.set(dest,{x:b[0],y:b[1],kind:'drop',items:[]});drops.get(dest).items.push(r);}
-    const stops=[...pickups.values()],ordered=[];let x=courier.x,y=courier.y;
+    const stops=[...pickups.values()],ordered=[];let x=bot.x,y=bot.y;
     while(stops.length){stops.sort((a,b)=>(a.x-x)**2+(a.y-y)**2-((b.x-x)**2+(b.y-y)**2));const stop=stops.shift();ordered.push(stop);x=stop.x;y=stop.y;}
-    courier.plan=[...ordered,...drops.values()];courier.trips++;
+    bot.plan=[...ordered,...drops.values()];bot.trips++;
   }
-  const stop=courier.plan[0],speed=400*(1+.1*G.lv.bHiz);
-  walk(courier,stop.x,stop.y,speed,dt);
-  if(Math.hypot(courier.x-stop.x,courier.y-stop.y)>.8)return;
-  courier.moving=false;courier.wait+=dt;if(courier.wait<.16)return;courier.wait=0;
-  if(stop.kind==='pickup'){for(const r of stop.items){r.stage='loaded';courier.cargo.push(r);}}
-  else{for(const r of stop.items){const i=riders.indexOf(r);if(i<0)continue;deliverTransport(r);riders.splice(i,1);const c=courier.cargo.indexOf(r);if(c>=0)courier.cargo.splice(c,1);}}
-  courier.plan.shift();
+  const stop=bot.plan[0],speed=courierSpeed();
+  walk(bot,stop.x,stop.y,speed,dt);
+  if(Math.hypot(bot.x-stop.x,bot.y-stop.y)>.8)return;
+  bot.moving=false;bot.wait+=dt;if(bot.wait<.16)return;bot.wait=0;
+  if(stop.kind==='pickup'){for(const r of stop.items){r.stage='loaded';bot.cargo.push(r);}}
+  else{for(const r of stop.items){const i=riders.indexOf(r);if(i<0)continue;deliverTransport(r);riders.splice(i,1);const c=bot.cargo.indexOf(r);if(c>=0)bot.cargo.splice(c,1);}}
+  bot.plan.shift();
 }
-function drawCourier(){
-  if(!inView(courier.x,courier.y,40)||!courier.plan.length&&!courier.cargo.length)return;
-  const x=courier.x,y=courier.y,bob=courier.moving?Math.sin(courier.phase)*.5:0;
-  ctx.fillStyle='#17271d44';ell(x,y+5,17,5);ctx.fillStyle='#3d5143';rr(x-16,y-7+bob,32,15,4);ctx.fillStyle='#b4bc97';rr(x-14,y-10+bob,28,14,3);ctx.fillStyle='#4b4131';circ(x-10,y+7,3);circ(x+10,y+7,3);
-  const first=courier.cargo[0];if(first){ctx.drawImage(payloadSprite(first.item),x-14,y-32+bob,28,28);if(courier.cargo.length>1){ctx.font='800 8px system-ui,sans-serif';ctx.fillStyle='#f5edce';ctx.textAlign='center';ctx.fillText('×'+courier.cargo.length,x+11,y-11);}}
+function drawCourier(bot=courier){
+  if(!inView(bot.x,bot.y,55))return;const x=bot.x,y=bot.y,bob=bot.moving?Math.sin(bot.phase)*.4:0;
+  ctx.fillStyle='#17271d44';ell(x,y+6,20,7);
+  // Dört belirgin lastik, metal jant ve hareket eden tekerlek kolları.
+  for(const dx of [-14,14])for(const dy of [-5,8]){ctx.fillStyle='#242b29';ell(x+dx,y+dy,5,6);ctx.fillStyle='#adbaae';circ(x+dx,y+dy,2.9);ctx.strokeStyle='#475449';ctx.lineWidth=1.3;const a=bot.phase*.8;ctx.beginPath();ctx.moveTo(x+dx-Math.cos(a)*2.5,y+dy-Math.sin(a)*2.5);ctx.lineTo(x+dx+Math.cos(a)*2.5,y+dy+Math.sin(a)*2.5);ctx.stroke();}
+  ctx.fillStyle='#47644f';rr(x-16,y-13+bob,32,22,5);ctx.fillStyle='#b9c8a2';rr(x-14,y-16+bob,28,21,4);ctx.fillStyle='#7c8e68';ctx.fillRect(x-11,y+1,22,2);
+  if(bot.cargo.length){ctx.drawImage(payloadSprite(bot.cargo[0].item),x-14,y-36+bob,28,28);ctx.fillStyle='#263e31';rr(x-22,y-27,44,13,4);ctx.fillStyle='#f5edce';ctx.font='800 8px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(bot.cargo.length+'/'+courierCapacity(),x,y-18);}
 }
 function drawBeltGround(){
-  // Yalnızca makineye bağlı küçük çıkış parçaları; uzun hatlar çizilmez.
-  for(const st of STATIONS)if(active(st)&&inView(st.x,st.y,110)){
-    const on=st.kind==='mill'?beltOn(st.shop?'cUn':'bUn'):st.kind==='prep'?beltOn('cHamur'):beltOn(st.shop?'cVitrin':'bVitrin');if(!on)continue;
-    const x=st.x+32,y=st.y+92;ctx.fillStyle='#777d67';rr(x-8,y-7,16,23,3);ctx.fillStyle='#354839';rr(x-5,y-5,10,19,2);ctx.strokeStyle='#a0b193';ctx.lineWidth=1;
-    for(let i=0;i<4;i++){const yy=y-4+(i*5+time*9)%18;ctx.beginPath();ctx.moveTo(x-4,yy);ctx.lineTo(x+4,yy);ctx.stroke();}
-  }
+  // Fırın çıkışları kasadır; yalnızca çiftlik makineleri ve teslimat uçları hareket eder.
   for(const id in FARM_LINES)if(beltOn(id)){
     const a=FARM_LINES[id].path(FARM_LINES[id].m)[0];if(!inView(a[0],a[1],30))continue;ctx.fillStyle='#708570';rr(a[0]-9,a[1]-8,18,18,4);ctx.fillStyle='#c3d3b6';circ(a[0],a[1],5);ctx.strokeStyle='#3b5d46';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a[0]-3,a[1]+Math.sin(time*3)*3);ctx.lineTo(a[0]+3,a[1]-Math.sin(time*3)*3);ctx.stroke();
   }
@@ -1490,7 +1501,7 @@ function drawBeltGround(){
   if(selectedRoute&&time<selectedRouteUntil){ctx.save();ctx.strokeStyle=ITEM_COL(selectedRoute.item);ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.setLineDash([5,7]);ctx.lineDashOffset=-time*18;ctx.beginPath();selectedRoute.path.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.restore();}
 }
 function visibleTransportHit(x,y){
-  if(courier.plan.length&&Math.hypot(x-courier.x,y-courier.y)<22)return true;
+  if(couriers.slice(0,courierCount()).some(b=>Math.hypot(x-b.x,y-b.y)<23))return true;
   for(const st of STATIONS)if(active(st)&&Math.hypot(x-st.x-32,y-st.y-92)<18)return true;
   for(const id in FARM_LINES)if(beltOn(id)){const a=FARM_LINES[id].path(FARM_LINES[id].m)[0];if(Math.hypot(x-a[0],y-a[1])<18)return true;}
   return selectedRoute&&time<selectedRouteUntil;
@@ -1500,7 +1511,7 @@ function inspectTransportAt(x,y){
   if(!visibleTransportHit(x,y))return false;
   let best=null,nearest=13*13;
   const routes=transportRoutes();
-  if((courier.plan.length||courier.cargo.length)&&Math.hypot(x-courier.x,y-courier.y)<22){const item=courier.cargo[0]||courier.plan[0]?.items[0];if(item){best=routes.find(r=>r.line===item.line&&r.dst===item.dst&&r.item===item.item);nearest=-1;}}
+  const nearbyBot=couriers.slice(0,courierCount()).find(b=>Math.hypot(x-b.x,y-b.y)<23);if(nearbyBot){const item=nearbyBot.cargo[0]||nearbyBot.plan[0]?.items[0];if(item){best=routes.find(r=>r.line===item.line&&r.dst===item.dst&&r.item===item.item);nearest=-1;}}
   for(const rider of riders){const p=pointOnPath(rider.path,rider.d),dist=(x-p[0])**2+(y-p[1])**2;if(!best&&dist<18*18){const route=routes.find(r=>r.line===rider.line&&r.dst===rider.dst&&r.item===rider.item);if(route){best=route;nearest=-1;break;}}}
   for(const route of routes)for(let i=1;i<route.path.length;i++){
     const a=route.path[i-1],b=route.path[i],dx=b[0]-a[0],dy=b[1]-a[1],d=dx*dx+dy*dy;if(!d)continue;const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/d)),px=a[0]+t*dx,py=a[1]+t*dy,dist=(x-px)**2+(y-py)**2;
@@ -1832,7 +1843,7 @@ function updateGarson(dt) {
   if (GAR.state === 'idle') {
     GAR.task = null;
     for (const g of guests) if (g.state === 'wait' && g.got < g.n && G.counter[g.want] > 0 && !(GAR.task)) GAR.task = { kind:'serve', guest:g };
-    if (!GAR.task) { const i = cafeTables().findIndex(t => t.dirty && !t.guest); if (i >= 0) GAR.task = { kind:'clean', table:i }; }
+    if (!GAR.task) { const i = cafeTables().findIndex((t,i) => t.dirty && !t.guest && !carriers.some(n=>n.task?.kind==='clean'&&n.task.table===i)); if (i >= 0) GAR.task = { kind:'clean', table:i }; }
     if (GAR.task) GAR.state = GAR.task.kind === 'serve' ? 'fetch' : 'go';
   }
   let tx = GAR.home.x, ty = GAR.home.y;
@@ -1953,7 +1964,7 @@ function openQuests() {
 //  2) Ambardaki hammaddeyi / değirmendeki unu, talebi olan (ya da kutusu boşalan) istasyona götür
 //  3) Tepside kalan ürünleri vitrine yerleştir
 const DEPOT_SRC = 'AMBAR';
-const depotPoint = n => ({ x:DEPOT.x + 36 + (n.off || 0) * .8, y:DEPOT.y + 60 + carriers.indexOf(n) * 30 });
+const depotPoint = n => ({x:628+Math.sign(n.off||0)*3,y:DEPOT.y+44+Math.max(0,carriers.indexOf(n))*42});
 function claimed(srcId, item, me) { return carriers.some(n => n !== me && n.task && n.task.src === srcId && n.task.item === item && n.state === 'fetch'); }
 function claimedAmount(srcId, item, me) { let k = 0; for (const n of carriers) if (n !== me && n.task && n.task.src === srcId && n.task.item === item && n.state === 'fetch') k += n.task.amount; return k; }
 function chooseCarrierTask(n) {
@@ -1963,7 +1974,9 @@ function chooseCarrierTask(n) {
     if (t.amount > 0 && (!best || t.score > best.score)) best = t;
   };
   const sh = n.shop || 0, hasSeller = G.unlocked[CSS[sh].unlock];
+  const automated=beltOn(sh?'cVitrin':'bVitrin');
   for (const s of OVENS) {
+    if(automated)continue;
     if (!active(s) || s.shop !== sh) continue;
     const p = s.out, have = G.st[s.id].out, room = crateCap() - G.counter[p] - beltIncomingCounter(p);
     // fazla ürün: vitrin dolu ve tepside birikmişse tezgaha (köy fırınında)
@@ -1988,7 +2001,7 @@ function chooseCarrierTask(n) {
       // tüketen istasyon aç kalmışsa (kutusunda bir pişirimlik bile yok) en öne: zincirin geri kalanı ona bağlı
       const starving = G.st[s.id].bins[item] < s.recipe[item], downstream = INTER[s.out] || DEM[s.out] > 0;
       const w = (DEM[s.out] > 0 ? 3 : 1) * (G.st[s.id].bins[item] < s.recipe[item] * 2 ? 2 : 1);
-      consider({ score:(starving && downstream ? 1500 : 400 + w * 60) + deficit, src:pr.id, item, dst:s.id, amount:Math.min(carCap(n), deficit, avail) });
+      consider({ score:(starving && (downstream || automated) ? 1500 : 400 + w * 60) + deficit, src:pr.id, item, dst:s.id, amount:Math.min(carCap(n), deficit, avail) });
     }
   }
   // hammadde: ambar → istasyon
@@ -1999,17 +2012,29 @@ function chooseCarrierTask(n) {
       const avail = G.depot[m] - claimedAmount(DEPOT_SRC, m, n), deficit = binCap() - G.st[s.id].bins[m] - incoming(s.id, m);
       if (avail <= 0 || deficit <= 0) continue;
       const w = matPriority(m) * (s.kind === 'oven' && DEM[s.out] > 0 ? 1.5 : 1);
-      consider({ score:380 + w * 50 + deficit, src:DEPOT_SRC, item:m, dst:s.id, amount:Math.min(carCap(n), deficit, avail) });
+      consider({ score:380 + w * 50 + deficit + (automated&&G.st[s.id].bins[m]<s.recipe[m]?900:0), src:DEPOT_SRC, item:m, dst:s.id, amount:Math.min(carCap(n), deficit, avail) });
     }
+  }
+  if(automated&&sh===0&&G.unlocked.cafe){
+    const index=cafeTables().findIndex((t,i)=>t.dirty&&!t.guest&&!carriers.some(o=>o!==n&&o.task?.kind==='clean'&&o.task.table===i)&&!(GAR.task?.kind==='clean'&&GAR.task.table===i));
+    if(index>=0)consider({kind:'clean',table:index,dst:'cafe',amount:1,score:950});
   }
   return best;
 }
 function updateCarrier(n, dt) {
   if (n.state === 'idle') {
     n.task = chooseCarrierTask(n);
-    if (n.task) n.state = 'fetch';
+    if (n.task) n.state = n.task.kind==='clean'?'clean':'fetch';
     else { walk(n, n.home.x, n.home.y, carSpd(n), dt); n.status = n.moving ? '' : 'İş bekliyor'; return; }
   }
+  if(n.task?.kind==='clean'){
+    const i=n.task.table,ts=tableState[i],table=TABLES[i];
+    if(!ts.dirty||ts.guest){n.task=null;n.state='idle';n.cleaning=-1;n.status='';return;}
+    walk(n,table.x+34,table.y+4,carSpd(n),dt);n.status='Masa siliyor';n.cleaning=i;
+    if(!n.moving){ts.cleanT+=dt;if(ts.cleanT>=1.1){ts.dirty=false;ts.cleanT=0;n.task=null;n.state='idle';n.cleaning=-1;n.status='';addXp(n.k,'Çırak');}}
+    return;
+  }
+  n.cleaning=-1;
   const t = n.task, fromDepot = t.src === DEPOT_SRC, src = fromDepot ? null : ST[t.src];
   const srcPt = fromDepot ? depotPoint(n) : { x:zoneOf(src).x + n.off, y:zoneOf(src).y };
   if (n.state === 'fetch') {
@@ -2020,7 +2045,7 @@ function updateCarrier(n, dt) {
       let busy;
       if (fromDepot) {
         busy = got < t.amount && G.depot[t.item] > 0 && n.carry.length < carCap(n);
-        if (busy && (n.actT = (n.actT || 0) + dt * .6) >= .085) { n.actT = 0; G.depot[t.item]--; n.carry.push(t.item); fly('item', t.item, BIN_COL_X, depotBinY(t.item) - 6, cp(n).x, cp(n).y, .22); }
+        if (busy && (n.actT = (n.actT || 0) + dt * .6) >= .085) { n.actT = 0; G.depot[t.item]--; n.carry.push(t.item); fly('item', t.item, depotBinPos(t.item).x, depotBinY(t.item) - 6, cp(n).x, cp(n).y, .22); }
       } else busy = pickFrom(n, n.carry, src, carCap(n), dt * .6, .085, t.amount - got);
       if (!busy) { if (n.carry.length) n.state = 'deliver'; else { n.state = 'idle'; n.task = null; } }
     }
@@ -2040,7 +2065,7 @@ function updateCarrier(n, dt) {
       if (n.actT >= .1) {
         n.actT = 0; const t2 = n.carry.pop();
         if (t2 !== undefined) {
-          if (fromDepot) { G.depot[t2]++; fly('item', t2, n.x, n.y - 20, BIN_COL_X, depotBinY(t2) - 6, .2); }
+          if (fromDepot) { G.depot[t2]++; fly('item', t2, n.x, n.y - 20, depotBinPos(t2).x, depotBinY(t2) - 6, .2); }
           else { G.st[src.id].out++; fly('item', t2, n.x, n.y - 20, srcPt.x, srcPt.y - 4, .2); }
         }
       }
@@ -2092,7 +2117,7 @@ function updateGatherer(n, dt) {
       if (k < 0) { n.status = 'Ambar dolu'; return; }
       if ((n.depT = (n.depT || 0) + dt * .6) >= .07) {
         n.depT = 0; const m = n.carry.splice(k, 1)[0]; G.depot[m]++;
-        fly('item', m, cp(n).x, cp(n).y, BIN_COL_X, depotBinY(m) - 6, .22);
+        fly('item', m, cp(n).x, cp(n).y, depotBinPos(m).x, depotBinY(m) - 6, .22);
       }
     }
   }
@@ -2207,7 +2232,7 @@ function updateTractor(dt) {
       TR.fx = -1; TR.fy = 0;
       if ((TR.t += dt) >= .08) {
         TR.t = 0;
-        if (TR.carry > 0 && G.depot.bugday < depotCap()) { TR.carry--; G.depot.bugday++; fly('item', 'bugday', TR.x - 12, TR.y - 30, BIN_COL_X, depotBinY('bugday') - 6, .3); }
+        if (TR.carry > 0 && G.depot.bugday < depotCap()) { TR.carry--; G.depot.bugday++; fly('item', 'bugday', TR.x - 12, TR.y - 30, depotBinPos('bugday').x, depotBinY('bugday') - 6, .3); }
         else if (TR.carry > 0) TR.status = 'Ambar dolu';
       }
       if (TR.carry === 0) TR.state = 'park';
@@ -2971,7 +2996,7 @@ function drawStation(s) {
     ctx.fillStyle = '#5a3a2a'; ctx.fillRect(x + 16, y - 52, 9, 22);
   }
   // durum çubuğu ve tabela
-  if (G.st[s.id].out >= outMax()) txt('Tepsi dolu', x, y - 58, 9.5, '#f7efe2');
+  if (G.st[s.id].out >= outMax()) txt('Kasa dolu', x, y - 58, 9.5, '#f7efe2');
   else if (working) { ctx.fillStyle = 'rgba(0,0,0,.55)'; rr(x - 22, y - 62, 44, 5, 2.5); ctx.fillStyle = '#f2b544'; rr(x - 22, y - 62, 44 * bakeT[s.id] / bakeInt(s), 5, 2.5); }
   else txt('Malzeme yok', x, y - 60, 9.5, '#ffb08a');
   if (s.kind === 'oven' && DEM[s.out] > 0) { ctx.fillStyle = '#e8643a'; rr(x - 30, y - 82, 60, 15, 7); txt(`${DEM[s.out]} sipariş`, x, y - 74.5, 9, '#fff'); }
@@ -2990,13 +3015,12 @@ function drawBins(s) {
     txt(`${n}/${cc}`, p.x, p.y + 12, 8.5, ok ? '#f7efe2' : '#ffb08a');
   });
 }
-function drawTray(s) {
-  if (!inView(s.x,s.y,140)) return;
-  const z = zoneOf(s), n = G.st[s.id].out;
-  ctx.fillStyle = '#8a6d48'; rr(z.x - 22, z.y - 10, 44, 18, 4);
-  ctx.fillStyle = '#6b5232'; rr(z.x - 20, z.y - 8, 40, 14, 3);
-  for (let i = 0; i < Math.min(n, 9); i++) drawItem(z.x - 12 + (i % 3) * 12, z.y + 4 - Math.floor(i / 3) * 7, s.out, .85);
-  if (n > 9) txt('×' + n, z.x + 26, z.y - 8, 9, '#f7efe2');
+function drawTray(s){
+  if(!inView(s.x,s.y,140))return;const x=s.x+32,y=s.y+92,n=G.st[s.id].out,packed=riders.filter(r=>byCourier(r)&&r.stage!=='loaded'&&Math.abs(r.path[0][0]-x)<3&&Math.abs(r.path[0][1]-y)<3).length,total=n+packed;
+  ctx.fillStyle='#0003';ell(x,y+9,22,6);ctx.fillStyle='#855d36';rr(x-20,y-7,40,24,3);ctx.fillStyle='#b88b52';rr(x-21,y-10,42,8,3);ctx.fillStyle='#423221';rr(x-16,y-8,32,9,2);
+  for(let i=0;i<Math.min(total,6);i++)drawItem(x-11+(i%3)*11,y+2-Math.floor(i/3)*7,s.out,.7);
+  ctx.fillStyle='#ad7c43';ctx.fillRect(x-19,y+4,38,4);ctx.fillRect(x-19,y+12,38,3);ctx.fillStyle='#d6b982';ctx.fillRect(x-18,y-3,3,19);ctx.fillRect(x+15,y-3,3,19);
+  txt(String(total),x,y+24,8.5,total?'#f1deb0':'#c0b59f');
 }
 function drawCounter(sh = 0) {
   if (!inView(COUNTERS[sh].x+COUNTERS[sh].w/2,COUNTERS[sh].y,340)) return;
@@ -3042,19 +3066,12 @@ function drawDesk() {
   txt('Usta masası', x, y - 79, 11, '#f2b544');
 }
 // Ambar: sağ duvar boyunca beş hammadde kutusu, önünde kahverengi bırakma/alma alanı
-function drawDepot() {
-  if (!inView(BIN_COL_X,DEPOT.y+DEPOT.h/2,DEPOT.h/2+50)) return;
-  const cc = depotCap();
-  MAT_ORDER.forEach(m => {
-    const y = depotBinY(m), x = BIN_COL_X, open = matOpen(m), n = G.depot[m];
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; rr(x - 18, y + 10, 36, 7, 3);
-    ctx.fillStyle = '#5e3a22'; rr(x - 17, y - 4, 34, 18, 4);
-    ctx.fillStyle = '#93623b'; rr(x - 19, y - 18, 38, 16, 5);
-    ctx.fillStyle = '#2a1a10'; rr(x - 15, y - 15, 30, 10, 3);
-    for (let k = 0; k < Math.min(n, 3); k++) drawItem(x - 9 + k * 9, y - 7, m, .7);
-    txt(!open && !n ? '—' : n >= cc ? 'DOLU' : `${n}/${cc}`, x, y + 5, 8.5, n >= cc ? '#e8643a' : '#f7efe2');
-  });
-  txt('Ambar', BIN_COL_X - 4, DEPOT.y - 14, 11, '#f2d28a');
+function drawDepot(){
+  if(!inView(687,608,150))return;const cc=depotCap();
+  ctx.fillStyle='#0004';rr(648,708,82,10,5);ctx.fillStyle='#60452e';rr(648,500,78,210,6);ctx.fillStyle='#c39a60';rr(646,494,82,14,4);ctx.fillStyle='#b08650';ctx.fillRect(651,508,5,199);ctx.fillRect(719,508,5,199);ctx.fillRect(685,508,4,199);
+  for(let row=0;row<5;row++){ctx.fillStyle='#2c392b';rr(656,512+row*38,63,32,3);ctx.fillStyle='#b08650';ctx.fillRect(652,543+row*38,71,4);}
+  for(const m of MAT_ORDER){const p=depotBinPos(m),n=G.depot[m],on=matOpen(m);ctx.save();ctx.globalAlpha=on?1:.3;ctx.fillStyle='#8c693f';rr(p.x-13,p.y-15,26,26,3);ctx.fillStyle='#483a29';rr(p.x-11,p.y-13,22,13,2);drawItem(p.x,p.y-1,m,.75);ctx.fillStyle='#efe0bc';ctx.font='800 8.5px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText(n+'/'+cc,p.x,p.y+8);ctx.restore();}
+  ctx.fillStyle='#e8d4a7';ctx.font='800 9px system-ui,sans-serif';ctx.textAlign='center';ctx.fillText('AMBAR',687,504);
 }
 // Kafe masası: iki sandalye, örtülü yuvarlak masa; misafirin tabağı (yedikçe azalır), çay bardağı; kirliyse kırıntılı tabak
 function drawTable(i) {
@@ -3567,7 +3584,7 @@ function render() {
   if (G.unlocked.garson) L.push([GAR.y, drawGarson]);
   if (G.unlocked.kalfa && KALFA.st) L.push([KALFA.y, drawKalfa]);
   if (ORDER) { L.push([BASKET.y + 6, drawBasket]); L.push([VIP_POS.y, drawVip]); }
-  if(courier.plan.length||courier.cargo.length)L.push([courier.y,drawCourier]);
+  for(const bot of couriers.slice(0,courierCount()))L.push([bot.y,()=>drawCourier(bot)]);
   if(petLife.mouse)L.push([petLife.mouse.y,()=>drawCafeMouse(petLife.mouse)]);
   // fırıncı da malzemeyi önünde ittiği el arabasında taşır (araba arkada kalıyorsa önce o çizilir)
   L.push([P.y, () => {
@@ -3607,7 +3624,7 @@ function render() {
     if (cs.busy) { ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(x - 18, y, 36, 5, 2.5); ctx.fillStyle = '#f2b544'; rr(x - 18, y, 36 * sv.t / sv.int, 5, 2.5); }
   }
   for (const n of carriers) {
-    const job = n.task ? (n.task.dst === 'counter' ? `${ITEM_NAME(n.task.item)} → vitrin` : n.task.dst === 'stand' ? `${ITEM_NAME(n.task.item)} → tezgah` : `${ITEM_NAME(n.task.item)} → ${ST[n.task.dst].name}`) : '';
+    const job = n.task ? (n.task.kind==='clean'?'Masa siliyor':n.task.dst === 'counter' ? `${ITEM_NAME(n.task.item)} → vitrin` : n.task.dst === 'stand' ? `${ITEM_NAME(n.task.item)} → tezgah` : `${ITEM_NAME(n.task.item)} → ${ST[n.task.dst].name}`) : '';
     txt(`${n.shop ? 'Çarşı çırağı · ' : ''}Sv ${lvlOf(n.k)} · ${n.carry.length}/${carCap(n)}`, n.x, n.y - 70, 9.5, '#f7efe2');
     const st = n.status || job; if (st) txt(st, n.x, n.y - 83, 9.5, n.status ? '#e8643a' : '#f2d28a');
   }
@@ -3872,7 +3889,7 @@ const HOW = `<ol>
   <li><b>Kafe:</b> açınca misafirler masalara oturur. İstedikleri ürünü masanın yanına götür; yiyip öderler ve masayı kirli bırakırlar. Kirli masanın yanında durarak sil. <b>Garson</b> tutarsan bunları o yapar.</li>
   <li><b>Fazla ürün tezgahı:</b> vitrin dolunca fırında biriken ürünleri ön kapının yanındaki tezgaha koy (çırak da koyar). Sokaktan gelenler kendileri alıp parasını bırakır.</li>
   <li><b>Köy panosu</b>: süre sınırı olmayan siparişler al, müdavimlerini tanı, ürün ustalığı rozetleri ve tasarım temaları kazan.</li>
-  <li><b>Görünür taşıma</b>: ürünler kısa çıkış bantlarında görünür. Tek servis arabası ürünleri toplu taşır; hammadde otomasyonu uzun hat çizmeden çalışır. Bir hatta kısa dokunarak inceleyebilirsin.</li>
+  <li><b>Görünür taşıma</b>: ürünler fırınların yanındaki kasalarda birikir. Tekerlekli sevkiyat araçları ürünleri toplu taşır; hammadde otomasyonu uzun hat çizmeden çalışır. Bir hatta kısa dokunarak inceleyebilirsin.</li>
   <li><b>Akış</b>: otomatik sevkiyatların kaynağını, hedefini ve yoldaki miktarı gösterir. Bir bağlantıya dokununca yalnızca o yol kısa süre haritada görünür.</li>
   <li><b>Çiftlik makineleri</b> (usta masası → Çiftlik): su pompası, yumurta toplama ve sağım makinesi hammaddeyi kendiliğinden ambara getirir; traktör ve biçerdöver buğdayı biçer.</li>
   <li><b>Yeni arazi:</b> çiftliğin güneyindeki çit kapısından geçilir: arı kovanları (bal), fındık bahçesi, zeytinlik ve biçerdöverle büyük buğday tarlası.</li>
@@ -3933,14 +3950,14 @@ function openRestore() {
 function openOperations() {
   const rows = STATIONS.filter(active).map(s => {
     const missing = Object.entries(s.recipe).filter(([m,q]) => G.st[s.id].bins[m] < q).map(([m]) => ITEM_NAME(m));
-    const state = G.st[s.id].out >= outMax() ? 'Tepsi dolu · taşıma gerekiyor' : missing.length ? 'Eksik: ' + missing.join(', ') : 'Üretim hazır';
+    const state = G.st[s.id].out >= outMax() ? 'Kasa dolu · taşıma gerekiyor' : missing.length ? 'Eksik: ' + missing.join(', ') : 'Üretim hazır';
     return `<div class="quest"><span>•</span><b>${s.name}</b><span>${state}</span></div>`;
   }).join('');
   modal(`<h2>İşletme durumu</h2><p>Kendin al: ${standTotal()}/${standCap()} · hedef ${standTarget()} ürün</p>${rows}<p class="note">Durum bu menü açıldığı anda hesaplanır. Oyun şu anda duraklatıldı.</p>`, [['Yönetim ayarları','pri',openManagement],['Geri','',openMenu]]);
 }
 function openManagement() {
   const labels = {auto:'Dengeli',supply:'Hammadde ve üretim',stand:'Kendin al tezgahı',counter:'Vitrin'};
-  modal(`<h2>İşletme yönetimi</h2><p>Çalışan önceliği: <b>${labels[G.workerPri]}</b></p><p class="note">Seçimin bir sonraki işte uygulanır; acil üretim ihtiyaçları korunur.</p>`, [
+  modal(`<h2>İşletme yönetimi</h2><p>Çalışan önceliği: <b>${labels[G.workerPri]}</b></p><p class="note">Seçimin bir sonraki işte uygulanır. Sevkiyat aracı açıkken çıraklar ürün taşımak yerine un ve hammadde dağıtır, boş masaları temizler. Acil üretim ihtiyacı önce gelir.</p>`, [
     ...Object.entries(labels).map(([v,l]) => [l,G.workerPri === v ? 'pri' : '',() => { G.workerPri=v; save(); openManagement(); }]),
     [`Tezgah hedefi: ${G.standMode === 'stand' ? '10' : '6'} ürün`,'',() => {G.standMode=G.standMode === 'stand' ? 'balanced' : 'stand';save();openManagement();}],
     ['Dekorasyon seç','',openDecor], ['Geri','',openMenu]
@@ -4036,7 +4053,7 @@ function start(data) {
   G = normalize(data && data.G) || load() || fresh();
   ORDER = G.order;
   ensureTransit();
-  P.x = G.px; P.y = G.py; collide(P, 12);
+  P.x = G.px; P.y = G.py; if(P.x>636&&P.x<738&&P.y>488&&P.y<728)P.x=630; collide(P, 12);
   if (G.unlocked.car) addCarrier(0);
   if (G.unlocked.car2) addCarrier(1);
   if (G.unlocked.gat) addGatherer(0);
