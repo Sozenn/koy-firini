@@ -15,7 +15,22 @@
 <style>html,body{margin:0;padding:0;background:#120e0b}[hidden]{display:none!important}
 /* ana ekrandan açılınca çentik ve alt çubuk altında kalmasın */
 #hud{padding-top:max(10px,env(safe-area-inset-top))!important;padding-left:max(16px,env(safe-area-inset-left))!important;padding-right:max(16px,env(safe-area-inset-right))!important}</style>
-</head>
+<style>
+html,body,#app{height:100%;height:100dvh}
+#hud{flex-wrap:wrap;align-items:center}
+#hud .hl{flex-direction:row;flex-wrap:wrap;max-width:100%}
+#goal{flex-basis:100%;order:2;white-space:normal}
+#mobileTools{position:absolute;right:max(12px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:10;display:grid;grid-template-columns:repeat(2,48px);gap:8px}
+#mobileTools button{width:48px;height:48px;border:1px solid var(--line);border-radius:14px;background:#241c16ee;font-weight:800;font-size:18px;touch-action:manipulation}
+#mobileTools #pauseBtn{width:104px;grid-column:1/-1;display:flex;gap:8px;justify-content:center;font-size:14px}
+#mobileTools #bookBtn{font-size:11px;padding:0}
+#recipe{top:112px;max-width:calc(100% - 24px);white-space:normal;flex-wrap:wrap}
+#statusBtn{font-size:11px!important}
+#modal{padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom));z-index:30}
+#desk{z-index:25}
+@media(max-width:420px){#cash{font-size:18px}#daypill{font-size:11px}#hud{gap:5px}#goal{font-size:11px}#recipe{font-size:11px}}
+@media(max-height:480px){#hud .hl{flex-direction:row}#mobileTools{grid-template-columns:repeat(4,44px);gap:4px}#mobileTools button{width:44px;height:44px}#mobileTools #pauseBtn{grid-column:span 2;width:92px}#recipe{top:90px}}
+</style></head>
 <body>
 <title>Köy Fırını</title>
 <style>
@@ -168,6 +183,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 const $ = s => document.querySelector(s);
 const cv = $('#cv'), ctx = cv.getContext('2d'), app = $('#app');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
+const GAME_VERSION = 'v11';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -261,7 +277,7 @@ const OFFERS = [
   { id:'S9',    where:'floor', x:675, y:1190, cost:16000, req:'S8',  label:'Baklava fırını',  icon:'baklava' },
   { id:'win',   where:'desk', tab:'guild', cost:40000, req:'S4',  label:'Altın Oklava Ödülü', desc:'Köyün en iyi fırını ol. Oyunun son hedefi. Aldıktan sonra fırını devredip ustalık yıldızıyla yeniden başlayabilirsin.' },
   // Fazla ürün tezgahı: vitrin dolunca fırında kalan ürünler buraya konur, müşteriler kendileri alır
-  { id:'stand', where:'floor', x:170, y:770, cost:1500, req:'cafe', label:'Fazla ürün tezgahı', icon:'ekmek', optional:true },
+  { id:'stand', where:'floor', x:170, y:770, cost:1500, req:'cafe', label:'Kendin al tezgahı', icon:'ekmek', optional:true },
   { id:'standUp', where:'desk', tab:'shop', up:true, base:500, mul:2, max:4, req:'stand', label:'Tezgah rafı', desc:() => `Fazla ürün tezgahı ${standCap()} → ${standCap() + 6} ürün alır` },
   // Çiftlik makineleri: toplamayı otomatikleştirir (sıradaki hedefte görünmez)
   { id:'pompa', where:'desk', tab:'farm', optional:true, cost:2500, req:'S4', label:'Su pompası', desc:'Kuyuya motor takılır: su borudan kendiliğinden ambara akar.' },
@@ -290,7 +306,7 @@ const OFFERS = [
   { id:'vitrin',where:'desk', tab:'shop', up:true, base:35,  mul:1.9, max:6, req:null,   label:'Vitrin',     desc:() => `Her vitrin bölmesi ${crateCap()} → ${crateCap() + 4} ürün alır` },
   { id:'kutu',  where:'desk', tab:'shop', up:true, base:50,  mul:1.9, max:6, req:null,   label:'Malzeme kutuları', desc:() => `İstasyonların önündeki her kutu ${binCap()} → ${binCap() + 3} malzeme alır` },
   { id:'tepsi', where:'desk', tab:'shop', up:true, base:45,  mul:1.9, max:5, req:null,   label:'Tepsiler',   desc:() => `İstasyon tepsileri ${outMax()} → ${outMax() + 3} ürün alır` },
-  { id:'masa',  where:'desk', tab:'shop', up:true, base:900, mul:2, max:2, req:'cafe', label:'Kafe masası', desc:() => `Kafedeki masa sayısı ${2 + G.lv.masa} → ${3 + G.lv.masa}` },
+  { id:'masa',  where:'desk', tab:'shop', up:true, base:900, mul:2, max:4, req:'cafe', label:'Kafe alanını genişlet', desc:() => `Kafedeki masa sayısı ${2 + G.lv.masa} → ${3 + G.lv.masa}` },
   { id:'garsonSpd', where:'desk', tab:'staff', up:true, base:300, mul:2, max:5, req:'garson', label:'Garson hızı', desc:() => 'Garson %12 daha hızlı yürür' },
   { id:'ambar', where:'desk', tab:'shop', up:true, base:40,  mul:1.9, max:6, req:null,   label:'Ambar',      desc:() => `Ambardaki her kutu ${depotCap()} → ${depotCap() + 10} hammadde alır` },
   // Bantlar: taşımayı otomatikleştirir; talebi olan istasyona/ürüne öncelik verir (optional: HUD'daki sıradaki hedefte görünmez)
@@ -319,7 +335,7 @@ const stationOfOffer = id => STATIONS.find(s => s.req === id && s.kind === 'oven
 
 /* Yerleşim — tur: çiftlik → kapı → ambar (kapının hemen altı) → istasyonların önündeki kutular (üst sıra) → vitrin arkası + altın yığını
    Usta masası sol altta, yolun dışında. Bantlar y=314/330 hattından istasyonlara, y=392 hattından vitrine gider. */
-const COUNTER  = { x:96, y:468, w:500, d:46, h:26 };     // vitrinli tezgah: solda yazar kasa, sonra 3 ürün bölmesi
+const COUNTER  = { x:96, y:468, w:400, d:46, h:26 };     // vitrinli tezgah: solda yazar kasa, sonra 3 ürün bölmesi
 const CASHIER  = { x:122, y:425 };
 const DROP     = { x:205, y:402, w:240, h:44 };          // yeşil alan: ürünü vitrine bırak
 const CASHPILE = { x:178, y:362 };
@@ -404,7 +420,7 @@ const fresh = () => ({ money:0, cash:0, cash2:0, unlocked:{}, paid:{}, hinted:{}
   lv:{ spd:0, cap:0, ates:0, cashSpd:0, carSpd:0, gatSpd:0, vitrin:0, kutu:0, tepsi:0, orak:0, kova:0, sepet:0, kurek:0, ambar:0, bHiz:0, masa:0, garsonSpd:0,
     standUp:0, trSpd:0, vanCap:0, mudur:0 },
   counter:zeroProducts(), st:freshSt(), depot:Object.assign(Object.fromEntries(MAT_ORDER.map(m => [m, 0])), { bugday:4, su:2 }), carry:[], px:340, py:330, sound:true, intro:false, sold:0,
-  day:1, dayT:0, rep:2.5, best:0, today:{ sold:0, earned:0, angry:0 }, stats:Object.assign(zeroProducts(), { orders:0, cafe:0, trips:0 }), quests:{}, order:null, orderCD:60, beltPri:'auto',
+  day:1, dayT:0, rep:2.5, best:0, today:{ sold:0, earned:0, angry:0 }, stats:Object.assign(zeroProducts(), { orders:0, cafe:0, trips:0 }), quests:{}, order:null, orderCD:60, beltPri:'auto', workerPri:'auto', standMode:'balanced', viewScale:1, decor:'classic',
   xp:{ car0:0, car1:0, car2:0, gat0:0, gat1:0, cash:0, cash2:0, gar:0 },
   stand:zeroProducts(), br:{ s1:freshBranch(), s2:freshBranch() }, vanLoad:[], prestige:0, ern:0, rate:0, lastSeen:0 });
 let G;
@@ -417,6 +433,8 @@ const speed    = () => 150 + 26 * G.lv.spd;
 const bakeInt  = s => s.time * Math.pow(.82, G.lv.ates) * (kalfaAt(s) ? .7 : 1) / usta();
 const standCap = () => 12 + 6 * G.lv.standUp;
 const standTotal = () => PROD_ORDER.reduce((a, p) => a + G.stand[p], 0);
+const standTarget = () => Math.min(standCap(), G.standMode === 'stand' ? 10 : 6);
+const standIncoming = () => riders.filter(r => r.dst === 'stand').length + carriers.reduce((a,n) => a + (n.task?.dst === 'stand' ? (n.state === 'fetch' ? n.task.amount : n.carry.length) : 0),0);
 const trCap    = () => (10 + 4 * G.lv.trSpd) * (G.unlocked.bicer ? 2 : 1);
 const vanCap   = () => 12 + 6 * G.lv.vanCap;
 const branchRate = (l = G.lv.mudur) => .2 * (1 + .35 * l);   // uzak şube saniyede kaç ürün satar
@@ -424,10 +442,10 @@ const shopProducts = shop => OVENS.filter(s => s.shop === shop && active(s)).map
 const sec      = n => n.toFixed(2).replace('.', ',');
 const PLAYER_SERVE = .2;
 const cashierInt = (l = G.lv.cashSpd) => .75 * Math.pow(.82, l);
-const carSpeed = () => 90 + 11 * G.lv.carSpd;
+const carSpeed = () => 110 + 11 * G.lv.carSpd;
 const carCap   = (n) => 4 + G.lv.carSpd + (n && n.shop ? 3 : 0);   // Çarşı çırağının arabası büyük: ambar uzak
-const gatSpeed = () => 105 + 10 * G.lv.gatSpd;
-const gatCap   = () => 4 + G.lv.gatSpd;
+const gatSpeed = () => 125 + 10 * G.lv.gatSpd;
+const gatCap   = () => 6 + G.lv.gatSpd;
 const crateCap = () => 8 + 4 * G.lv.vitrin;
 const binCap   = () => 6 + 3 * G.lv.kutu;
 const outMax   = () => 8 + 3 * G.lv.tepsi;
@@ -440,7 +458,7 @@ const canBake  = s => Object.entries(s.recipe).every(([m, q]) => G.st[s.id].bins
 const matOpen  = m => isOn(MATS[m].area) && (!['bal', 'findik', 'zeytin'].includes(m) || isOn('genis'));
 const nodeOpen = nd => matOpen(nd.m) && isOn(nd.req) && isOn(nd.req2);
 const gatherTime = m => MATS[m].base * Math.pow(.78, G.lv[MATS[m].tool]) / usta();
-const gatTime  = m => gatherTime(m) * 1.5 * Math.pow(.85, G.lv.gatSpd);
+const gatTime  = m => gatherTime(m) * 1.15 * Math.pow(.85, G.lv.gatSpd);
 const zoneCost = z => z.up ? Math.ceil(z.base * Math.pow(z.mul, G.lv[z.id])) : z.cost;
 const offerAvailable = o => isOn(o.req) && isOn(o.req2) && (o.up ? G.lv[o.id] < o.max : !G.unlocked[o.id]);
 const TOOL_NAMES = ['eski', 'demir', 'demir', 'çelik', 'çelik', 'altın', 'efsane'];
@@ -466,7 +484,7 @@ function normalize(d) {
   if (!d.depot) { out.px = 340; out.py = 330; }   // önceki sürüm kaydı: yeni yerleşimde güvenli bir yerden başla
   for (const s of Object.values(out.st)) if (!Number.isFinite(s.out)) s.out = 0;
   for (const k of ['money', 'cash', 'sold']) if (!Number.isFinite(out[k])) out[k] = 0;
-  out.carry = (Array.isArray(out.carry) ? out.carry : []).filter(t => PRODUCTS[t] || MATS[t] || t === 'un');
+  out.carry = (Array.isArray(out.carry) ? out.carry : []).filter(t => PRODUCTS[t] || MATS[t] || t === 'un' || t === 'hamur');
   // gün, itibar, istatistik ve görevler (önceki sürüm kayıtlarında yok)
   out.xp = Object.assign(f.xp, d.xp); for (const k in out.xp) if (!Number.isFinite(out.xp[k])) out.xp[k] = 0;
   if (!PRODUCTS[out.beltPri] && out.beltPri !== 'auto') out.beltPri = 'auto';
@@ -482,6 +500,10 @@ function normalize(d) {
   for (const k in out.stand) if (!Number.isFinite(out.stand[k])) out.stand[k] = 0;
   out.vanLoad = (Array.isArray(d.vanLoad) ? d.vanLoad : []).filter(t => PRODUCTS[t]);
   for (const k of ['cash2', 'prestige', 'ern', 'rate', 'lastSeen']) if (!Number.isFinite(out[k])) out[k] = 0;
+  if (!['auto','supply','stand','counter'].includes(out.workerPri)) out.workerPri = 'auto';
+  if (!['balanced','stand'].includes(out.standMode)) out.standMode = 'balanced';
+  if (!['classic','sage','rose'].includes(out.decor)) out.decor = 'classic';
+  out.viewScale = Number.isFinite(out.viewScale) ? Math.max(.6,Math.min(1.3,out.viewScale)) : 1;
   return out;
 }
 function load() { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) {} return null; }
@@ -620,7 +642,7 @@ function resize() {
   if (w < 2 || h < 2) return;
   vw = w; vh = h; dpr = Math.min(devicePixelRatio || 1, 2);
   cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
-  zoom = Math.min(vw / 370, vh / 600);
+  zoom = Math.min(vw / 370, vh / 600) * (G?.viewScale || 1);
   buildFloor();
 }
 // Zemin bir kez çizilip önbelleğe alınır. Derinlik hissi: tek yönden ışık (sol üst), sağ-alta düşen gölgeler,
@@ -1085,9 +1107,9 @@ function dropStand(e, carry, dt, rate = .07) {
   return true;
 }
 const standSpot = k => ({ x:STAND.x + 14 + (k % 6) * 18, y:STAND.y + 6 - Math.floor(k / 6) % 3 * 8 });
-const CRATE = { w:80, h:38, gap:5 };   // ürün bölmesi
+const CRATE = { w:62, h:38, gap:4 };   // ürün bölmesi
 const crateX = t => { const sh = shopOf(t); return COUNTERS[sh].x + 64 + SHOP_PRODS[sh].indexOf(t) * (CRATE.w + CRATE.gap); };
-function counterSpot(t, k) { const C = COUNTERS[shopOf(t)]; k = k % 8; return { x:crateX(t) + 13 + (k % 4) * 18, y:C.y - C.h + 21 + Math.floor(k / 4) * 13 }; }
+function counterSpot(t, k) { const C = COUNTERS[shopOf(t)]; k = k % 8; return { x:crateX(t) + 13 + (k % 4) * 12, y:C.y - C.h + 21 + Math.floor(k / 4) * 13 }; }
 function binPos(s, k) {
   const n = Object.keys(s.recipe).length, w = 30;
   return { x:s.x - (n * w) / 2 + w / 2 + k * w, y:s.y + 52 };
@@ -1104,7 +1126,7 @@ function beltIncomingCounter(p) { let k = 0; for (const r of riders) if (r.dst =
 // Bir hammaddenin istasyon kutularında eksik kalan toplam miktarı (yoldakiler düşülür)
 function needFor(m) {
   let n = 0;
-  for (const s of STATIONS) if (active(s) && s.recipe[m] !== undefined) n += Math.max(0, binCap() - G.st[s.id].bins[m] - incoming(s.id, m));
+  for (const s of STATIONS) if (active(s) && s.recipe[m] !== undefined) n += Math.max(0, Math.min(binCap(), s.recipe[m] * 3) - G.st[s.id].bins[m] - incoming(s.id, m));
   return n;
 }
 // Malzemenin önceliği: talebi olan ürünün istasyonu ve kutusu boşalmış istasyon önce
@@ -1178,6 +1200,7 @@ const TRUNK_IN = 314, TRUNK_UN = 330, TRUNK_OUT = 392;   // ambar→istasyon, de
 const depotExit = { x:DEPOT.x + 36, y:DEPOT.y };
 function pathDepotTo(s, m) { const b = binPos(s, Object.keys(s.recipe).indexOf(m)); return [[depotExit.x, depotExit.y], [depotExit.x, TRUNK_IN], [b.x, TRUNK_IN], [b.x, b.y + 8]]; }
 function pathUnTo(s) { const b = binPos(s, Object.keys(s.recipe).indexOf('un')), sx = ST.M.x + 30; return [[sx, ST.M.y + 92], [sx, TRUNK_UN], [b.x, TRUNK_UN], [b.x, b.y + 8]]; }
+function pathToStand(s) { return [[s.x+32,s.y+92],[s.x+32,TRUNK_OUT],[360,TRUNK_OUT],[360,STAND_DROP.y-30],[170,STAND_DROP.y-30],[170,STAND_DROP.y+12]]; }
 function pathToCounter(s) { const ox = s.x + 32, cx = crateX(s.out) + CRATE.w / 2; return [[ox, s.y + 92], [ox, TRUNK_OUT], [cx, TRUNK_OUT], [cx, COUNTER.y - 12]]; }
 const pathLen = p => p.slice(1).reduce((a, q, i) => a + Math.hypot(q[0] - p[i][0], q[1] - p[i][1]), 0);
 function pickOven(filterFn, list = OVENS0) {   // talebi olan, kutusu boşalmış fırın önce
@@ -1200,6 +1223,12 @@ const FARM_LINES = {
 const ridingTo = (dst, item) => riders.reduce((k, r) => k + (r.dst === dst && r.item === item), 0);
 function beltJob(id) {
   if (id === 'bVitrin') {
+    // Aynı bant kendi-al tezgahına da fiziksel teslimat yapar; vitrine iki ürün ayrılır.
+    const reserved = standIncoming();
+    if (G.unlocked.stand && standTotal() + reserved < standTarget()) {
+      const src = OVENS0.find(s => active(s) && G.st[s.id].out > 0 && G.counter[s.out] >= 2);
+      if (src) return { item:src.out, take:() => G.st[src.id].out--, dst:'stand', path:pathToStand(src) };
+    }
     let best = null, bs = -1;
     for (const s of OVENS0) { if (!active(s) || G.st[s.id].out <= 0 || !crateRoom(s.out)) continue; const sc = (DEM[s.out] > 0 ? 100 + DEM[s.out] : 0) + G.st[s.id].out + (s.out === G.beltPri ? 1000 : 0); if (sc > bs) { bs = sc; best = s; } }
     if (!best) return null;
@@ -1267,7 +1296,11 @@ function updateBelts(dt) {
   for (let i = riders.length - 1; i >= 0; i--) {
     const r = riders[i]; r.d += speedPx * (r.dst === 'depot' ? 1.4 : 1) * dt;
     if (r.d >= r.len) {
-      if (r.dst === 'counter') G.counter[r.item]++;
+      if (r.dst === 'stand') {
+        if (standTotal() < standCap()) G.stand[r.item]++;
+        else { const oven = OVENS.find(s => s.out === r.item); G.st[oven.id].out++; }
+      }
+      else if (r.dst === 'counter') G.counter[r.item]++;
       else if (r.dst === 'depot') G.depot[r.item]++;
       else G.st[r.dst].bins[r.item]++;
       riders.splice(i, 1);
@@ -1288,7 +1321,7 @@ function beltPaths() {
   if (G.unlocked.bMill) out.push(pathDepotTo(ST.M, 'bugday'));
   if (G.unlocked.bAmbar) for (const s of OVENS0) if (active(s)) for (const m of Object.keys(s.recipe)) if (MATS[m]) out.push(pathDepotTo(s, m));
   if (G.unlocked.bUn) for (const s of OVENS0) if (active(s)) out.push(pathUnTo(s));
-  if (G.unlocked.bVitrin) for (const s of OVENS0) if (active(s)) out.push(pathToCounter(s));
+  if (G.unlocked.bVitrin) for (const s of OVENS0) if (active(s)) { out.push(pathToCounter(s)); if (G.unlocked.stand) out.push(pathToStand(s)); }
   if (beltOn('cDepo')) {
     for (const s of STATIONS) if (s.shop === 1 && active(s)) for (const m of Object.keys(s.recipe)) if (MATS[m]) out.push(pathDepotToCarsi(s, m));
     out.push(pathInter(ST.M2, ST.H, 'un', TRUNK2_UN));
@@ -1321,7 +1354,7 @@ const eventOf = (day = G.day) => day % 7 === 0 ? EVENTS.bayram : day % 7 === 3 ?
 function pickWanted(shop = 0) {
   const ps = shopProducts(shop); if (!ps.length) return null;
   const ph = phaseOf(), weights = PHASES[ph].w || PHASES.ogle.w, ev = eventOf();
-  const wt = p => (weights[p] || 1) * (ev && ev.mul[p] && (!ev.aksam || ph === 'aksam') ? ev.mul[p] : 1);
+  const wt = p => (G.counter[p] > 0 ? 2 : G.st[OVENS.find(s => s.out === p).id].out > 0 ? 1 : .3) * (weights[p] || 1) * (ev && ev.mul[p] && (!ev.aksam || ph === 'aksam') ? ev.mul[p] : 1);
   let r = Math.random() * ps.reduce((a, p) => a + wt(p), 0), want = ps[0];
   for (const p of ps) { r -= wt(p); if (r <= 0) { want = p; break; } }
   return want;
@@ -1335,8 +1368,8 @@ const looks = () => ({ dress:pick(DRESS), skin:pick(SKIN), hair:pick(HAIR), apro
 function spawnCustomer(shop = 0) {
   const want = pickWanted(shop); if (!want) return;
   const e = ENTER(shop);
-  customers.push(Object.assign({ shop, x:e.x, y:e.y, path:e.path, tx:e.x, ty:e.y, state:'in', want, n:1 + Math.floor(Math.random() * MAX_N[want]), got:0, earn:0,
-    pat:1, maxPat:50 + Math.random() * 12, mood:'ok', fx:0, fy:-1, phase:0, moving:true, waitFront:0 }, looks()));
+  customers.push(Object.assign({ shop, x:e.x, y:e.y, path:e.path, tx:e.x, ty:e.y, state:'in', want, n:1 + Math.floor(Math.random() * Math.min(2, MAX_N[want])), got:0, earn:0,
+    pat:1, maxPat:65 + Math.random() * 15, mood:'ok', fx:0, fy:-1, phase:0, moving:true, waitFront:0 }, looks()));
 }
 function leave(c, mood) {
   const x = EXIT(c.shop || 0);
@@ -1368,10 +1401,16 @@ function computeDemand() {
 // Her dükkanın satış durumu: kuyruğun başındaki müşteri, satış sayacı, kasa çekmecesi animasyonu
 const SV = [{ t:0, int:.2, front:null, regAnim:0 }, { t:0, int:.2, front:null, regAnim:0 }];
 let spawnT2 = 4;
+function arrivalInterval(sh, eventMul = 1) {
+  const ps = shopProducts(sh), stock = ps.reduce((a,p) => a + G.counter[p] + G.st[OVENS.find(s => s.out === p).id].out, 0);
+  const waiting = customers.filter(c => c.shop === sh && c.state !== 'leave').length + (sh ? 0 : guests.filter(g => ['in','wait'].includes(g.state)).length);
+  const capacity = Math.max(1, OVENS.filter(s => s.shop === sh && active(s)).length);
+  return Math.max(4, (8 - capacity * .45) * (stock < 3 ? 1.8 : 1) * (1 + waiting * .3) / Math.min(1.25,eventMul));
+}
 function updateCustomers(dt) {
   // Müşteri sıklığı: fırın sayısı ve itibar arttıkça artar; gece yeni müşteri gelmez; etkinlik günü sıklaşır
   const ev = eventOf(), evMul = ev ? ev.spawn : 1;
-  const interval = Math.max(2, (5.4 - .7 * OVENS0.filter(active).length) * (1.35 - .1 * G.rep)) / evMul;
+  const interval = arrivalInterval(0, evMul);
   const q0 = customers.filter(c => c.shop === 0 && c.state !== 'leave');
   spawnT += dt;
   if (phaseOf() !== 'gece' && spawnT >= interval) {
@@ -1383,7 +1422,7 @@ function updateCustomers(dt) {
   if (G.unlocked.carsi) {
     const n1 = OVENS1.filter(active).length, q1 = customers.filter(c => c.shop === 1 && c.state !== 'leave');
     spawnT2 += dt;
-    if (phaseOf() !== 'gece' && spawnT2 >= Math.max(2.5, (6.6 - .7 * n1) * (1.35 - .1 * G.rep)) / evMul && q1.length < QUEUE[1].max) { spawnT2 = 0; spawnCustomer(1); }
+    if (phaseOf() !== 'gece' && spawnT2 >= arrivalInterval(1, evMul) && q1.length < QUEUE[1].max) { spawnT2 = 0; spawnCustomer(1); }
   }
   for (const sh of [0, 1]) {
     const q = customers.filter(c => c.shop === sh && c.state !== 'leave'), Q = QUEUE[sh];
@@ -1545,9 +1584,9 @@ function deliverToOrder(e, carry, dt, rate = .1) {
 /* ================= Kafe: masalar, misafirler, garson ================= */
 // Misafir boş ve temiz bir masaya oturur, siparişini masaya ister (sen ya da garson getirir), yer, 1,6 katı öder ve masayı kirli bırakır.
 // Kirli masaya yeni misafir oturmaz: yanında durarak (ya da garson) silinir.
-const TABLES = [{ x:455, y:650 }, { x:565, y:650 }, { x:455, y:775 }, { x:565, y:775 }];
+const TABLES = [{ x:435, y:600 }, { x:565, y:600 }, { x:435, y:710 }, { x:565, y:710 }, { x:435, y:810 }, { x:565, y:810 }];
 const tableState = TABLES.map(() => ({ guest:null, dirty:false, cleanT:0 }));
-const cafeTables = () => G.unlocked.cafe ? tableState.slice(0, Math.min(4, 2 + G.lv.masa)) : [];
+const cafeTables = () => G.unlocked.cafe ? tableState.slice(0, Math.min(TABLES.length, 2 + G.lv.masa)) : [];
 let guests = [];
 function spawnGuest(i) {
   const t = TABLES[i], want = pickWanted(0), e = ENTER(0);
@@ -1744,18 +1783,21 @@ function claimed(srcId, item, me) { return carriers.some(n => n !== me && n.task
 function claimedAmount(srcId, item, me) { let k = 0; for (const n of carriers) if (n !== me && n.task && n.task.src === srcId && n.task.item === item && n.state === 'fetch') k += n.task.amount; return k; }
 function chooseCarrierTask(n) {
   let best = null;
-  const consider = t => { if (t.amount > 0 && (!best || t.score > best.score)) best = t; };
+  const consider = t => {
+    if ((G.workerPri === 'supply' && ST[t.dst]) || G.workerPri === t.dst) t.score += 450;
+    if (t.amount > 0 && (!best || t.score > best.score)) best = t;
+  };
   const sh = n.shop || 0, hasSeller = G.unlocked[CSS[sh].unlock];
   for (const s of OVENS) {
     if (!active(s) || s.shop !== sh) continue;
     const p = s.out, have = G.st[s.id].out, room = crateCap() - G.counter[p] - beltIncomingCounter(p);
     // fazla ürün: vitrin dolu ve tepside birikmişse tezgaha (köy fırınında)
-    if (sh === 0 && G.unlocked.stand && have >= 2 && room <= 0 && !claimed(s.id, p, n)) {
-      const sr = standCap() - standTotal() - carriers.filter(o => o.task && o.task.dst === 'stand').reduce((a, o) => a + o.task.amount, 0);
-      if (sr > 0) consider({ score:60 + have * 3, src:s.id, item:p, dst:'stand', amount:Math.min(carCap(n), have, sr) });
+    if (sh === 0 && G.unlocked.stand && have > 0 && (room <= 0 || (G.counter[p] >= Math.min(2, crateCap()) && standTotal() + standIncoming() < standTarget())) && !claimed(s.id, p, n)) {
+      const sr = standCap() - standTotal() - standIncoming();
+      if (sr > 0) consider({ score:(standTotal() < standTarget() ? 1150 : 60) + have * 3, src:s.id, item:p, dst:'stand', amount:Math.min(carCap(n), have, sr) });
     }
     // ürünü vitrine taşımak kasiyerin (şubede müdürün) işi; çırak yalnızca o yokken yardım eder
-    if (hasSeller) continue;
+    if (hasSeller && DEM[p] <= 0 && G.counter[p] >= 2) continue;
     if (have > 0 && room > 0 && DEM[p] > 0 && !claimed(s.id, p, n)) consider({ score:1000 + DEM[p] * 50, src:s.id, item:p, dst:'counter', amount:Math.min(carCap(n), room) });
     if (have > 0 && room > 0 && !claimed(s.id, p, n)) consider({ score:100 + have * 5, src:s.id, item:p, dst:'counter', amount:Math.min(carCap(n), room) });
   }
@@ -1837,8 +1879,9 @@ function updateCarrier(n, dt) {
 function matScores() {
   const sc = {};
   for (const m of MAT_ORDER) {
-    if (!matOpen(m) || !STATIONS.some(s => active(s) && s.recipe[m] !== undefined) || !depotRoom(m)) continue;
-    const urgent = Math.max(0, needFor(m) - G.depot[m]) * matPriority(m);
+    if (!NODES.some(nd => nd.m === m && nodeOpen(nd) && nd.amt > 0) || !matOpen(m) || !STATIONS.some(s => active(s) && s.recipe[m] !== undefined) || !depotRoom(m)) continue;
+    const inTransit = gatherers.reduce((a,n) => a + n.carry.filter(t => t === m).length, 0);
+    const urgent = Math.max(0, needFor(m) - G.depot[m] - inTransit) * matPriority(m);
     sc[m] = urgent * 10 + (depotCap() - G.depot[m]);
   }
   return sc;
@@ -2029,7 +2072,7 @@ function updateStandBuyers(dt) {
   if ((buyT -= dt) <= 0) {
     buyT = 2;
     if (phaseOf() !== 'gece' && standTotal() > 0 && buyers.length < 2) {
-      buyT = 5 + Math.random() * 4;
+      buyT = 10 + Math.random() * 6;
       const e = ENTER(0);
       buyers.push(Object.assign({ x:e.x, y:e.y, path:e.path.slice(), tx:STAND.x + 20 + Math.random() * 80, ty:STAND_DROP.y + 8, state:'in', fx:0, fy:-1, phase:0, moving:true, t:0, n:0, got:0, paid:0 }, looks()));
     }
@@ -2037,7 +2080,7 @@ function updateStandBuyers(dt) {
   for (let i = buyers.length - 1; i >= 0; i--) {
     const b = buyers[i], arrived = stepWalker(b, 95, dt);
     if (b.state === 'leave') { if (arrived) buyers.splice(i, 1); continue; }
-    if (b.state === 'in' && arrived) { b.state = 'pick'; b.n = 1 + Math.floor(Math.random() * 3); b.fx = 0; b.fy = 1; if (Math.random() < .3) say(b, pick(SELF_LINES)); }
+    if (b.state === 'in' && arrived) { b.state = 'pick'; b.n = 1 + Math.floor(Math.random() * 2); b.fx = 0; b.fy = 1; if (Math.random() < .3) say(b, pick(SELF_LINES)); }
     if (b.state === 'pick' && (b.t += dt) >= .55) {
       b.t = 0;
       const avail = PROD_ORDER.filter(p => G.stand[p] > 0);
@@ -2222,7 +2265,7 @@ const UNLOCK_MSG = {
   carsi:'Çarşı şubesi açıldı! Çarşı yolundaki arka kapıdan gir: taş değirmen, hamur tezgahı, börek fırını hazır.',
   cs2:'Şube müdürü işbaşında: Çarşı şubesinde satış yapar.', car3:'Çarşı çırağı işe başladı.', findikB:'Fındık bahçesi açıldı.',
   S7:'Ay çöreği fırını kuruldu! 1 hamur + 2 fındık + 1 şeker pancarı.', zeytinB:'Zeytinlik açıldı.', S8:'Pide fırını kuruldu! 1 hamur + 1 zeytin + 1 yumurta.',
-  S9:'Baklava fırını kuruldu! 2 hamur + 2 fındık + 2 bal. En kıymetli ürün.', stand:'Fazla ürün tezgahı kuruldu: vitrin dolunca ürünleri buraya koy, müşteriler kendileri alır.',
+  S9:'Baklava fırını kuruldu! 2 hamur + 2 fındık + 2 bal. En kıymetli ürün.', stand:'Kendin al tezgahı kuruldu: çalışanlar ve vitrin bandı buraya da stok ayırır; müşteriler kendileri alır.',
   pompa:'Su pompası çalışıyor: su borudan ambara akıyor.', kBant:'Kümes bandı çalışıyor: yumurtalar ambara geliyor.', sagim:'Sağım makinesi çalışıyor: süt ambara akıyor.',
   kumes2:'Kümese 2 yeni yuva eklendi.', ahir2:'Ahıra 2 yeni inek geldi.', traktor:'Traktör geldi: buğday tarlasını kendisi biçiyor.', bicer:'Biçerdöver geldi! Büyük buğday tarlası açıldı.',
   van:'Kamyonet alındı. Bir şube açınca tezgahtaki ürünleri taşımaya başlar.', sube1:'Kasaba şubesi açıldı! Kamyonet ürünleri buraya taşıyacak.', sube2:'Şehir şubesi açıldı! Ürünler 2 katı fiyata satılıyor.',
@@ -2373,7 +2416,7 @@ function update(dt) {
       for (const [t, q] of Object.entries(s.recipe)) G.st[s.id].bins[t] -= q;
     }
   }
-  for (const nd of NODES) if (nd.amt < MATS[nd.m].max && (nd.t += dt) >= MATS[nd.m].regen) { nd.t = 0; nd.amt++; }
+  for (const nd of NODES) if (nd.amt < MATS[nd.m].max && (nd.t += dt) >= MATS[nd.m].regen * .8) { nd.t = 0; nd.amt++; }
   // Oyuncu: kaynak yanında toplar; istasyon dairesinde malzeme bırakır ve ürünü alır; yeşil alanda vitrine koyar
   if (gather(P, G.carry, cap(), dt, gatherTime) && !P.moving) {
     const d = Math.hypot(P.gNode.x - P.x, P.gNode.y - P.y) || 1; P.fx = (P.gNode.x - P.x) / d; P.fy = (P.gNode.y - P.y) / d;
@@ -2766,7 +2809,7 @@ function drawCounter(sh = 0) {
     const n = G.counter[t];
     for (let k = 0; k < Math.min(n, 12); k++) { const sp = counterSpot(t, k); drawItem(sp.x, sp.y, t, .95); }
     const full = n >= cc;
-    ctx.fillStyle = full ? '#e8643a' : 'rgba(0,0,0,.4)'; rr(cx + cw / 2 - 37, ly - 8, 74, 16, 8);
+    ctx.fillStyle = full ? '#e8643a' : 'rgba(0,0,0,.4)'; rr(cx + 1, ly - 8, cw - 2, 16, 8);
     txt(full ? 'DOLU' : `${PRODUCTS[t].name.split(' ')[0]} ${n}/${cc}`, cx + cw / 2, ly, 9.5, full ? '#1b1d22' : '#f7efe2');
   }
 }
@@ -2802,7 +2845,7 @@ function drawTable(i) {
   for (const s of [-1, 1]) { ctx.fillStyle = '#5e3a22'; rr(t.x + s * 34 - 9, t.y - 4, 18, 12, 3); ctx.fillStyle = '#7a5434'; rr(t.x + s * 34 - 9, t.y - 20, 18, 6, 2); }
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ell(t.x, t.y + 8, 26, 7);
   ctx.fillStyle = '#6b4a2e'; ctx.fillRect(t.x - 3, t.y - 6, 6, 14);
-  ctx.fillStyle = '#c9a36a'; ell(t.x, t.y - 10, 25, 12); ctx.fillStyle = '#f2ede4'; ell(t.x, t.y - 11, 21, 9);
+  ctx.fillStyle = '#c9a36a'; ell(t.x, t.y - 10, 25, 12); ctx.fillStyle = ({classic:'#f2ede4',sage:'#aac6a0',rose:'#e2b1bd'})[G.decor]; ell(t.x, t.y - 11, 21, 9);
   ctx.strokeStyle = '#e8643a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(t.x, t.y - 11, 17, 7, 0, 0, PI2); ctx.stroke();
   if (g && (g.state === 'wait' || g.state === 'eat')) {
     const shown = g.state === 'eat' ? Math.ceil(g.got * (1 - g.eatT / 6)) : g.got;
@@ -2906,7 +2949,7 @@ function drawStand() {
   ctx.fillStyle = '#5c432d'; ctx.fillRect(x + 2, y - 46, 4, 44); ctx.fillRect(x + w - 6, y - 46, 4, 44);
   for (let i = 0; i < 6; i++) { ctx.fillStyle = i % 2 ? '#f2ede4' : '#c8423a'; ctx.beginPath(); ctx.moveTo(x - 6 + i * (w + 12) / 6, y - 48); ctx.lineTo(x - 6 + (i + 1) * (w + 12) / 6, y - 48); ctx.lineTo(x - 6 + (i + 1) * (w + 12) / 6, y - 38); ctx.lineTo(x - 6 + i * (w + 12) / 6, y - 38); ctx.closePath(); ctx.fill(); }
   ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(x - 6, y - 38, w + 12, 3);
-  txt(`Fazla ürün · kendin al ${standTotal()}/${standCap()}`, x + w / 2, y - 56, 9.5, standTotal() >= standCap() ? '#e8643a' : '#f2d28a');
+  txt(`Kendin al ${standTotal()}/${standCap()}`, x + w / 2, y - 56, 9.5, standTotal() >= standCap() ? '#e8643a' : '#f2d28a');
 }
 // Traktör (kırmızı) ya da biçerdöver (sarı-yeşil, önünde dönen tırmık)
 function drawTractor() {
@@ -3240,6 +3283,11 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#120e0b'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(k, 0, 0, k, (vw / 2 - cam.x * zoom) * dpr, (vh / 2 - cam.y * zoom) * dpr);
   ctx.drawImage(floor, 0, 0, W, H);
+  if (G.unlocked.cafe) {
+    ctx.fillStyle = ({classic:'#78563544',sage:'#557b5144',rose:'#ab687d44'})[G.decor];
+    rr(385,550,220,310,14);
+    txt(G.lv.masa >= 3 ? 'Geniş kafe' : 'Köy kafesi', 495,560,10,'#f2d28a');
+  }
 
   // zemin katmanı
   const dg = .55 + Math.sin(time * 4) * .2;
@@ -3426,7 +3474,7 @@ function hud(dt) {
   else g = `${nz.where === 'desk' ? 'Usta masasında' : 'Sıradaki'}: <b>${nz.label}</b> · ${fmt(zoneCost(nz))} altın`;
   if (g !== shownGoal) { shownGoal = g; $('#goal').innerHTML = g; }
   const ev = eventOf();
-  $('#dayTxt').textContent = `${G.day}. gün · ${ev ? ev.name : PHASES[phaseOf()].name}${G.prestige ? ` · ✦${G.prestige}` : ''}`;
+  $('#dayTxt').textContent = `${GAME_VERSION} · ${G.day}. gün · ${ev ? ev.name : PHASES[phaseOf()].name}${G.prestige ? ` · ✦${G.prestige}` : ''}`;
   $('#dayBar').style.width = (G.dayT / DAY_LEN * 100).toFixed(1) + '%';
   const repKey = Math.round(G.rep * 4); if (repKey !== hud.rep) { hud.rep = repKey; $('#repStars').innerHTML = starsHtml(G.rep); $('#repStars').title = `İtibar ${G.rep.toFixed(1)} / 5`; }
   const db = $('#dropBtn'), hasCarry = G.carry.length > 0;
@@ -3517,10 +3565,33 @@ function openRestore() {
     ['Geri', '', openMenu],
   ]);
 }
+function openOperations() {
+  const rows = STATIONS.filter(active).map(s => {
+    const missing = Object.entries(s.recipe).filter(([m,q]) => G.st[s.id].bins[m] < q).map(([m]) => ITEM_NAME(m));
+    const state = G.st[s.id].out >= outMax() ? 'Tepsi dolu · taşıma gerekiyor' : missing.length ? 'Eksik: ' + missing.join(', ') : 'Üretim hazır';
+    return `<div class="quest"><span>•</span><b>${s.name}</b><span>${state}</span></div>`;
+  }).join('');
+  modal(`<h2>İşletme durumu</h2><p>Kendin al: ${standTotal()}/${standCap()} · hedef ${standTarget()} ürün</p>${rows}<p class="note">Durum bu menü açıldığı anda hesaplanır. Oyun şu anda duraklatıldı.</p>`, [['Yönetim ayarları','pri',openManagement],['Geri','',openMenu]]);
+}
+function openManagement() {
+  const labels = {auto:'Dengeli',supply:'Hammadde ve üretim',stand:'Kendin al tezgahı',counter:'Vitrin'};
+  modal(`<h2>İşletme yönetimi</h2><p>Çalışan önceliği: <b>${labels[G.workerPri]}</b></p><p class="note">Seçimin bir sonraki işte uygulanır; acil üretim ihtiyaçları korunur.</p>`, [
+    ...Object.entries(labels).map(([v,l]) => [l,G.workerPri === v ? 'pri' : '',() => { G.workerPri=v; save(); openManagement(); }]),
+    [`Tezgah hedefi: ${G.standMode === 'stand' ? '10' : '6'} ürün`,'',() => {G.standMode=G.standMode === 'stand' ? 'balanced' : 'stand';save();openManagement();}],
+    ['Dekorasyon seç','',openDecor], ['Geri','',openMenu]
+  ]);
+}
+function openDecor() {
+  modal('<h2>Kafe dekorasyonu</h2><p>Masa örtüsü ve kafe zemini birlikte değişir.</p>', [
+    ...Object.entries({classic:'Klasik ahşap',sage:'Adaçayı yeşili',rose:'Gül bahçesi'}).map(([v,l]) => [l,G.decor === v ? 'pri' : '',() => {G.decor=v;save();openDecor();}]),['Geri','',openManagement]
+  ]);
+}
 function openMenu() {
   if (deskOpen) closeDesk();
-  modal(`<h2>Duraklatıldı</h2><p>Satılan ürün: ${fmt(G.sold)}</p>`, [
+  modal(`<h2>Duraklatıldı · ${GAME_VERSION}</h2><p>Satılan ürün: ${fmt(G.sold)}</p>`, [
     ['Devam et', 'pri', closeModal],
+    ['İşletme durumu', '', openOperations],
+    ['Çalışanlar ve dekorasyon', '', openManagement],
     ['Görevler', '', openQuests],
     ['Tarif defteri', '', openBook],
     [`Ses: ${G.sound ? 'Açık' : 'Kapalı'}`, '', () => { G.sound = !G.sound; save(); openMenu(); }],
@@ -3534,10 +3605,17 @@ function openMenu() {
     ])],
   ]);
 }
+// Kontroller HUD genişliğinden bağımsız; her telefon yönünde erişilebilir.
+const tools = document.createElement('nav'); tools.id='mobileTools'; tools.setAttribute('aria-label','Oyun kontrolleri'); app.appendChild(tools);
+tools.appendChild($('#bookBtn'));
+const statusBtn = document.createElement('button'); statusBtn.id='statusBtn'; statusBtn.textContent='Durum'; statusBtn.onclick=openOperations; tools.appendChild(statusBtn);
+for (const [label,delta] of [['−',-.1],['+',.1]]) { const b=document.createElement('button'); b.textContent=label; b.setAttribute('aria-label',delta < 0 ? 'Uzaklaştır' : 'Yakınlaştır'); b.onclick=() => {G.viewScale=Math.max(.6,Math.min(1.3,Math.round((G.viewScale+delta)*10)/10));resize();save();}; tools.appendChild(b); }
+tools.appendChild($('#pauseBtn')); $('#pauseBtn').appendChild(document.createTextNode(' Menü'));
 $('#pauseBtn').addEventListener('click', openMenu);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { paused = true; joy = null; save(); } else { paused = !modalEl.hidden; lastT = performance.now(); } });
 addEventListener('pagehide', save);
 new ResizeObserver(resize).observe(app);
+new ResizeObserver(() => { $('#recipe').style.top = ($('#hud').offsetHeight + 12) + 'px'; }).observe($('#hud'));
 
 /* ================= Döngü ================= */
 let lastT = performance.now(), saveT = 0;
@@ -3579,3 +3657,4 @@ try { navigator.storage && navigator.storage.persist && navigator.storage.persis
 </script>
 </body>
 </html>
+
