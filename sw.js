@@ -1,6 +1,6 @@
 // Köy Fırını servis çalışanı: oyunu önbelleğe alır, internet yokken de açılır.
 // Oyun sayfası önce internetten istenir (güncelleme hemen gelsin), internet yoksa önbellekten açılır.
-const SURUM = 'koy-firini-v12';
+const SURUM = 'koy-firini-v13';
 const DOSYALAR = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
