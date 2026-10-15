@@ -187,7 +187,7 @@ const $ = s => document.querySelector(s);
 const cv = $('#cv'), app = $('#app');
 let ctx = cv.getContext('2d');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v17';
+const GAME_VERSION = 'v18';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -286,7 +286,7 @@ const OFFERS = [
   // Çiftlik makineleri: toplamayı otomatikleştirir (sıradaki hedefte görünmez)
   { id:'pompa', where:'desk', tab:'farm', optional:true, cost:2500, req:'S4', label:'Su pompası', desc:'Kuyu → Ambar: su otomatik sevk edilir. Akış ekranında yoldaki suyu ve hedefi görebilirsin.' },
   { id:'kBant', where:'desk', tab:'farm', optional:true, cost:3000, req:'S4', label:'Yumurta toplama', desc:'Yuvalardaki yumurtalar bantla ambara gelir.' },
-  { id:'sagim', where:'desk', tab:'farm', optional:true, cost:4000, req:'S4', label:'Sağım makinesi', desc:'İnekler makineyle sağılır, süt boruyla ambara akar.' },
+  { id:'sagim', where:'desk', tab:'farm', optional:true, cost:4000, req:'S4', label:'Sağım makinesi', desc:'Sağım makinesi sütü otomatik olarak ambara gönderir.' },
   { id:'kumes2', where:'desk', tab:'farm', optional:true, cost:2000, req:'S4', label:'Kümesi büyüt', desc:'Kümese 2 yeni yuva eklenir.' },
   { id:'ahir2', where:'desk', tab:'farm', optional:true, cost:3000, req:'S4', label:'Ahırı büyüt', desc:'Ahıra 2 yeni inek gelir.' },
   { id:'traktor', where:'desk', tab:'farm', optional:true, cost:6000, req:'S4', label:'Traktör', desc:'Buğday tarlasını kendisi biçer, buğdayı ambara getirir. Ambar doluysa bekler.' },
@@ -1011,13 +1011,10 @@ function walk(n, tx, ty, spd, dt) {
 function fly(kind, type, x0, y0, x1, y1, dur = .32) { if (parts.length < 110) parts.push({ kind, type, x0, y0, x1, y1, t:0, dur }); }
 function floatTxt(text, x, y, col = '#f2b544') { floats.push({ text, x, y, col, t:0 }); }
 // Satıcının konuşma balonu: müşteriye ürün verirken erkeğe "abim", kadına "ablam" der
-let speech = [];
-function say(e, text, must = false) {
-  if (!G.chatter || speech.length >= 3 || (e.lastSpeechAt !== undefined && time - e.lastSpeechAt < 7)) return;
-  e.lastSpeechAt = time;
-  if (!must && speech.length >= 3) return;   // ekran balonla dolmasın
-  speech = speech.filter(s => s.e !== e);
-  speech.push({ e, text, t:0, life:3.8 });
+let speech = [], lastSpeechTime = -Infinity;
+function say(e,text,must=false){
+  if(!inView(e.x,e.y,40)||!G.chatter||speech.length>=1||time-lastSpeechTime<22||(e.lastSpeechAt!==undefined&&time-e.lastSpeechAt<60))return;
+  lastSpeechTime=time;e.lastSpeechAt=time;speech.push({e,text,t:0,life:2.8});
 }
 // Türk internet esprileri ve sokak ağzından kısa laflar
 const LINES = {
@@ -1050,11 +1047,11 @@ const BANTER = {
   baker:['Bir fırın açtık, köyü doyurduk.', 'CEO: Çuvalı Eline Olan.', 'Hamur yoğurduk, hayat yoğurdu.', 'Diyet yarın, üretim bugün.', 'Ben ekmeğimin peşindeyim. Gerçekten.', 'İşler tıkırında, dizler çıtırında.', 'Şube açtım, boş vakit kapandı.', 'Kendi işim olsun dedim. Hep işim oldu.'],
   money:['Ciro var, tatil yok.', 'Bu ses... altın sesi!', 'Ekmek parası, kelimenin tam anlamıyla.', 'Büyüyünce fırın sahibi olacağım. Oldum!']
 };
-let banterT = 5, banterCursor = 0;
+let banterT = 20, banterCursor = 0;
 function updateBanter(dt) {
   if (!G.chatter || (banterT -= dt) > 0) return;
-  banterT = 8 + Math.random() * 5;
-  if (speech.length >= 2) return;
+  banterT = 28 + Math.random() * 16;
+  if (speech.length >= 1) return;
   const candidates = [[P,'baker'], ...carriers.map(n=>[n,'carrier']), ...gatherers.map(n=>[n,'gatherer']),
     ...CSS.filter(n=>G.unlocked[n.unlock]).map(n=>[n,'cashier']),
     ...(G.unlocked.garson ? [[GAR,'waiter']] : []),
@@ -1334,6 +1331,7 @@ function updateBelts(dt) {
   const speedPx = 90 * (1 + .15 * G.lv.bHiz);
   for (const id of [...BELT_IDS, ...CARSI_BELTS, ...Object.keys(FARM_LINES)]) {
     if (!beltOn(id)) continue;
+    if(['bVitrin','cVitrin'].includes(id)&&riders.filter(byCourier).length>=24)continue;
     const every = FARM_LINES[id] ? FARM_LINES[id].every : beltInt();
     beltT[id] = Math.min(every, (beltT[id] || 0) + dt);
     if (beltT[id] < every) continue;
@@ -1342,18 +1340,13 @@ function updateBelts(dt) {
     riders.push({ line:id, item:job.item, dst:job.dst, path:job.path, len:pathLen(job.path), d:0 });
   }
   for (let i = riders.length - 1; i >= 0; i--) {
-    const r = riders[i]; r.d += speedPx * (r.dst === 'depot' ? 1.4 : 1) * dt;
+    const r = riders[i]; if(byCourier(r))continue; r.d += speedPx * (r.dst === 'depot' ? 1.4 : 1) * dt;
     if (r.d >= r.len) {
-      if (r.dst === 'stand') {
-        if (standTotal() < standCap()) G.stand[r.item]++;
-        else { const oven = OVENS.find(s => s.out === r.item); G.st[oven.id].out++; }
-      }
-      else if (r.dst === 'counter') G.counter[r.item]++;
-      else if (r.dst === 'depot') G.depot[r.item]++;
-      else G.st[r.dst].bins[r.item]++;
+      deliverTransport(r);
       riders.splice(i, 1);
     }
   }
+  updateCourier(dt);
 }
 function pointOnPath(p, d) {
   for (let i = 1; i < p.length; i++) {
@@ -1416,59 +1409,14 @@ function openLogistics() {
   if (deskOpen) closeDesk();
   const routes=transportRoutes(),groups=new Map();
   routes.forEach((r,i)=>{if(!groups.has(r.line))groups.set(r.line,[]);groups.get(r.line).push([r,i]);});
-  modal('<h2>Otomatik sevkiyat</h2><p>Cam kapaklı bantlarda ürünler, borularda sıvılar, uzak teslimatlarda servis arabaları görünerek ilerler. Bir hatta dokunarak kaynağını ve hedefini inceleyebilirsin.</p>'+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: o yol 8 saniye vurgulanır. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
+  modal('<h2>Otomatik sevkiyat</h2><p>Makine çıkışlarında kısa bantlar vardır. Tek servis arabası en fazla 10 hazır ürünü bir turda toplar ve vitrine ya da kendin al tezgâhına bırakır. Hammadde otomasyonu çalışmaya devam eder; uzun hatlar yalnızca burada seçildiğinde gösterilir.</p>'+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: o yol 8 saniye vurgulanır. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
   modalEl.querySelectorAll('[data-route]').forEach(button=>button.onclick=()=>{selectedRoute=routes[Number(button.dataset.route)];selectedRouteUntil=time+8;closeModal();toast(ITEM_NAME(selectedRoute.item)+': '+selectedRoute.src+' → '+routeDestination(selectedRoute));});
 }
 function inView(x,y,pad=110) { return Math.abs(x-cam.x)<vw/(2*zoom)+pad && Math.abs(y-cam.y)<vh/(2*zoom)+pad; }
 // Hat geometrisi ve gövdeleri yalnızca kurulum değişince hazırlanır.
 const TRANSPORT_STYLE={raw:{color:'#92b8a1',bed:'#334b40',w:8},flour:{color:'#d5c795',bed:'#5a5140',w:8},dough:{color:'#deb68b',bed:'#66503e',w:8},goods:{color:'#d9ad68',bed:'#4b4334',w:11},water:{color:'#68b9dc',bed:'#335f72',w:6},milk:{color:'#e8e1c9',bed:'#758b85',w:6},eggs:{color:'#dec986',bed:'#62553a',w:9}};
 const transportKind=r=>r.line==='pompa'?'water':r.line==='sagim'?'milk':r.line==='kBant'?'eggs':['bUn','cUn'].includes(r.line)?'flour':r.line==='cHamur'?'dough':['bVitrin','cVitrin'].includes(r.line)?'goods':'raw';
-const cartRoute=r=>r.dst==='stand'||r.line==='cDepo';
-let networkArt=null,networkGame=null,networkRevision=-1,networkLight=null;
-function transportArt(){
-  if(networkGame===G&&networkRevision===geometryRevision&&networkLight===G.lightGraphics)return networkArt;
-  const groups=new Map(),carts=[],routes=transportRoutes();
-  for(const route of routes){
-    if(cartRoute(route)){carts.push(route);continue;}
-    const kind=transportKind(route);
-    for(let i=1;i<route.path.length;i++){
-      const a=route.path[i-1],b=route.path[i];if(a[0]===b[0]&&a[1]===b[1])continue;
-      const horizontal=a[1]===b[1],fixed=horizontal?a[1]:a[0],lo=horizontal?Math.min(a[0],b[0]):Math.min(a[1],b[1]),hi=horizontal?Math.max(a[0],b[0]):Math.max(a[1],b[1]);
-      const dir=horizontal?Math.sign(b[0]-a[0]):Math.sign(b[1]-a[1]);
-      const key=kind+':'+horizontal+':'+fixed+':'+dir;
-      if(!groups.has(key))groups.set(key,{kind,horizontal,fixed,dir,intervals:[]});groups.get(key).intervals.push([lo,hi]);
-    }
-  }
-  const segments=[];
-  for(const group of groups.values()){
-    const intervals=group.intervals.sort((a,b)=>a[0]-b[0]);let pair=null;
-    for(const range of intervals){if(pair&&range[0]<=pair[1]+.1)pair[1]=Math.max(pair[1],range[1]);else{pair=range.slice();segments.push({kind:group.kind,a:group.horizontal?[pair[0],group.fixed]:[group.fixed,pair[0]],b:null,pair,horizontal:group.horizontal,fixed:group.fixed,dir:group.dir});}}
-  }
-  for(const seg of segments){const from=seg.dir>0?seg.pair[0]:seg.pair[1],to=seg.dir>0?seg.pair[1]:seg.pair[0];seg.a=seg.horizontal?[from,seg.fixed]:[seg.fixed,from];seg.b=seg.horizontal?[to,seg.fixed]:[seg.fixed,to];}
-  const canvas=document.createElement('canvas'),scale=G.lightGraphics?.75:1;canvas.width=Math.ceil(W*scale);canvas.height=Math.ceil(H*scale);const c=canvas.getContext('2d');c.scale(scale,scale);c.lineCap='round';c.lineJoin='round';
-  for(const seg of segments){
-    const style=TRANSPORT_STYLE[seg.kind],pipe=seg.kind==='water'||seg.kind==='milk',a=seg.a,b=seg.b;
-    const stroke=(width,color,dy=0)=>{c.strokeStyle=color;c.lineWidth=width;c.beginPath();c.moveTo(a[0],a[1]+dy);c.lineTo(b[0],b[1]+dy);c.stroke();};
-    stroke(style.w+4,'#2e362c55',2);stroke(style.w+3,pipe?'#3f5554':'#a7ad9b');stroke(style.w+1,style.bed);stroke(pipe?style.w-2:style.w-3,style.color+'66');
-    const len=Math.hypot(b[0]-a[0],b[1]-a[1]),dx=(b[0]-a[0])/len,dy=(b[1]-a[1])/len;
-    // İnce kaburgalar ve şeffaf güvenlik kapağı: zeminle aynı seviyede.
-    for(let d=8;d<len;d+=pipe?54:24){const x=a[0]+dx*d,y=a[1]+dy*d;c.strokeStyle=pipe?'#b3beb0':'#e8ecdb66';c.lineWidth=pipe?2:1;c.beginPath();c.moveTo(x-dy*(style.w/2),y+dx*(style.w/2));c.lineTo(x+dy*(style.w/2),y-dx*(style.w/2));c.stroke();}
-    stroke(1,pipe?'#f3fbff99':'#f4faf033',-style.w/3);
-    c.fillStyle=style.color;for(let d=34;d<len;d+=94){const x=a[0]+dx*d,y=a[1]+dy*d;c.save();c.translate(x,y);c.rotate(Math.atan2(dy,dx));c.beginPath();c.moveTo(2.5,0);c.lineTo(-2,-2);c.lineTo(-2,2);c.closePath();c.fill();c.restore();}
-  }
-  // Güvenli geçişler geniş ve zemine sıfır cam paneller olarak çizilir.
-  for(const oy of [0,CARSI_Y])for(const x of [268,508,652]){
-    const crossing=segments.some(s=>s.horizontal&&s.kind!=='water'&&s.kind!=='milk'&&s.fixed>=oy+290&&s.fixed<=oy+380&&Math.min(s.a[0],s.b[0])<x&&Math.max(s.a[0],s.b[0])>x);
-    if(!crossing)continue;
-    c.fillStyle='#d9e6da2b';c.beginPath();c.roundRect(x-13,oy+293,26,92,4);c.fill();c.strokeStyle='#f7fae377';c.lineWidth=1;c.stroke();
-    c.fillStyle='#b4c5b1';for(const y of [oy+294,oy+383]){c.fillRect(x-14,y,28,2);}
-  }
-  // Her istasyonda iki küçük renkli giriş ve bir paket çıkışı.
-  const ports=new Map();
-  for(const r of routes){if(cartRoute(r))continue;for(const a of [r.path[0],r.path[r.path.length-1]]){const key=a.join(':')+':'+transportKind(r);if(ports.has(key))continue;ports.set(key,{x:a[0],y:a[1],kind:transportKind(r)});}}
-  for(const p of ports.values()){const color=TRANSPORT_STYLE[p.kind].color;c.fillStyle='#3f5148';c.beginPath();c.roundRect(p.x-7,p.y-6,14,12,3);c.fill();c.fillStyle=color;c.fillRect(p.x-4,p.y-3,8,6);}
-  networkGame=G;networkRevision=geometryRevision;networkLight=G.lightGraphics;return networkArt={canvas,segments,ports:[...ports.values()],carts};
-}
+const cartRoute=r=>r.line==='bVitrin'||r.line==='cVitrin';
 const payloadSprites=new Map();
 function payloadSprite(item){
   if(payloadSprites.has(item))return payloadSprites.get(item);
@@ -1492,67 +1440,75 @@ function drawWorldLayer(canvas){
   const x=Math.max(0,cam.x-vw/(2*zoom)-4),y=Math.max(0,cam.y-vh/(2*zoom)-4),right=Math.min(W,cam.x+vw/(2*zoom)+4),bottom=Math.min(H,cam.y+vh/(2*zoom)+4),w=right-x,h=bottom-y;
   if(w<=0||h<=0)return;const sx=canvas.width/W,sy=canvas.height/H;ctx.drawImage(canvas,x*sx,y*sy,w*sx,h*sy,x,y,w,h);
 }
-function drawBeltGround(){
-  const art=transportArt();drawWorldLayer(art.canvas);
-  for(const r of riders){if(cartRoute(r))continue;const [x,y]=pointOnPath(r.path,r.d);if(inView(x,y,30))drawCargo(x,y,r);}
-  drawNetworkLabels();
-  if(selectedRoute&&time<selectedRouteUntil){
-    const path=selectedRoute.path;ctx.save();ctx.strokeStyle=TRANSPORT_STYLE[transportKind(selectedRoute)].color;ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.lineDashOffset=-time*26;ctx.beginPath();path.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.restore();
-    const a=path[0],b=path[path.length-1];drawTransportLabel('ÇIKIŞ · '+selectedRoute.src,a[0],a[1]-22,'#f3d39b');drawTransportLabel('VARIŞ · '+routeDestination(selectedRoute),b[0],b[1]-22,'#b7d6a0');
-  }
+const courier={x:540,y:530,fx:1,fy:0,phase:0,moving:false,plan:[],cargo:[],wait:0,game:null,trips:0};
+const byCourier=r=>r.line==='bVitrin'||r.line==='cVitrin';
+function deliverTransport(r){
+  if(r.dst==='stand'){if(standTotal()<standCap())G.stand[r.item]++;else{const oven=OVENS.find(s=>s.out===r.item);G.st[oven.id].out++;}}
+  else if(r.dst==='counter')G.counter[r.item]++;
+  else if(r.dst==='depot')G.depot[r.item]++;
+  else G.st[r.dst].bins[r.item]++;
 }
-function drawTransportLabel(label,x,y,color){if(!inView(x,y,60))return;ctx.font=`800 ${Math.max(8.5,10/zoom)}px system-ui,sans-serif`;const w=ctx.measureText(label).width+12;ctx.fillStyle='#263b31ed';rr(x-w/2,y-9,w,18,4);ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x,y);}
-function drawNetworkLabels(){
-  for(const sh of G.unlocked.carsi?[0,1]:[0]){
-    const oy=sh*CARSI_Y;
-    if(beltOn(sh?'cDepo':'bAmbar')||!sh&&beltOn('bMill'))drawTransportLabel('01 · HAMMADDE',580,oy+299,'#b2d6b7');
-    if(beltOn(sh?'cUn':'bUn'))drawTransportLabel(sh?'02 · UN → HAMUR':'02 · UN → FIRIN',365,oy+318,'#e2d6a4');
-    if(sh&&beltOn('cHamur'))drawTransportLabel('03 · HAMUR',580,oy+338,'#e6bf99');
-    if(beltOn(sh?'cVitrin':'bVitrin'))drawTransportLabel('PAKET → SATIŞ',365,oy+(sh?370:356)+17,'#f0c78b');
+function updateCourier(dt){
+  if(courier.game!==G){Object.assign(courier,{x:540,y:530,plan:[],cargo:[],wait:0,game:G,via:null,moving:false});for(const r of riders)if(byCourier(r)){r.stage='queued';r.d=0;}}
+  if(!courier.plan.length){
+    const pending=riders.filter(r=>byCourier(r)&&!r.stage);for(const r of pending)r.stage='queued';
+    const queued=riders.filter(r=>byCourier(r)&&r.stage==='queued');
+    if(!queued.length){courier.moving=false;courier.wait=0;return;}
+    courier.wait+=dt;if(courier.wait<1.4&&queued.length<6)return;courier.wait=0;
+    const shop=queued[0].path[0][1]>=CARSI_Y?1:0,batch=queued.filter(r=>(r.path[0][1]>=CARSI_Y?1:0)===shop).slice(0,10);
+    const pickups=new Map(),drops=new Map();
+    for(const r of batch){r.stage='assigned';const a=r.path[0],b=r.path[r.path.length-1],key=a.join(':'),dest=b.join(':');if(!pickups.has(key))pickups.set(key,{x:a[0],y:a[1],kind:'pickup',items:[]});pickups.get(key).items.push(r);if(!drops.has(dest))drops.set(dest,{x:b[0],y:b[1],kind:'drop',items:[]});drops.get(dest).items.push(r);}
+    const stops=[...pickups.values()],ordered=[];let x=courier.x,y=courier.y;
+    while(stops.length){stops.sort((a,b)=>(a.x-x)**2+(a.y-y)**2-((b.x-x)**2+(b.y-y)**2));const stop=stops.shift();ordered.push(stop);x=stop.x;y=stop.y;}
+    courier.plan=[...ordered,...drops.values()];courier.trips++;
+  }
+  const stop=courier.plan[0],speed=400*(1+.1*G.lv.bHiz);
+  walk(courier,stop.x,stop.y,speed,dt);
+  if(Math.hypot(courier.x-stop.x,courier.y-stop.y)>.8)return;
+  courier.moving=false;courier.wait+=dt;if(courier.wait<.16)return;courier.wait=0;
+  if(stop.kind==='pickup'){for(const r of stop.items){r.stage='loaded';courier.cargo.push(r);}}
+  else{for(const r of stop.items){const i=riders.indexOf(r);if(i<0)continue;deliverTransport(r);riders.splice(i,1);const c=courier.cargo.indexOf(r);if(c>=0)courier.cargo.splice(c,1);}}
+  courier.plan.shift();
+}
+function drawCourier(){
+  if(!inView(courier.x,courier.y,40)||!courier.plan.length&&!courier.cargo.length)return;
+  const x=courier.x,y=courier.y,bob=courier.moving?Math.sin(courier.phase)*.5:0;
+  ctx.fillStyle='#17271d44';ell(x,y+5,17,5);ctx.fillStyle='#3d5143';rr(x-16,y-7+bob,32,15,4);ctx.fillStyle='#b4bc97';rr(x-14,y-10+bob,28,14,3);ctx.fillStyle='#4b4131';circ(x-10,y+7,3);circ(x+10,y+7,3);
+  const first=courier.cargo[0];if(first){ctx.drawImage(payloadSprite(first.item),x-14,y-32+bob,28,28);if(courier.cargo.length>1){ctx.font='800 8px system-ui,sans-serif';ctx.fillStyle='#f5edce';ctx.textAlign='center';ctx.fillText('×'+courier.cargo.length,x+11,y-11);}}
+}
+function drawBeltGround(){
+  // Yalnızca makineye bağlı küçük çıkış parçaları; uzun hatlar çizilmez.
+  for(const st of STATIONS)if(active(st)&&inView(st.x,st.y,110)){
+    const on=st.kind==='mill'?beltOn(st.shop?'cUn':'bUn'):st.kind==='prep'?beltOn('cHamur'):beltOn(st.shop?'cVitrin':'bVitrin');if(!on)continue;
+    const x=st.x+32,y=st.y+92;ctx.fillStyle='#777d67';rr(x-8,y-7,16,23,3);ctx.fillStyle='#354839';rr(x-5,y-5,10,19,2);ctx.strokeStyle='#a0b193';ctx.lineWidth=1;
+    for(let i=0;i<4;i++){const yy=y-4+(i*5+time*9)%18;ctx.beginPath();ctx.moveTo(x-4,yy);ctx.lineTo(x+4,yy);ctx.stroke();}
   }
   for(const id in FARM_LINES)if(beltOn(id)){
-    const fl=FARM_LINES[id],a=fl.path(fl.m)[0],col=TRANSPORT_STYLE[transportKind({line:id})].color;
-    if(inView(a[0],a[1],35)){
-      ctx.fillStyle='#526c5c';rr(a[0]-13,a[1]-13,26,25,5);ctx.fillStyle='#c4d1bc';rr(a[0]-10,a[1]-10,20,19,4);ctx.save();ctx.translate(a[0],a[1]);ctx.rotate(time*2);ctx.strokeStyle='#355246';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(6,0);ctx.moveTo(0,-6);ctx.lineTo(0,6);ctx.stroke();ctx.restore();ctx.fillStyle=col;circ(a[0]+8,a[1]-9,3);
-    }
-    drawTransportLabel(ITEM_NAME(fl.m)+' → AMBAR',a[0],a[1]+26,col);
+    const a=FARM_LINES[id].path(FARM_LINES[id].m)[0];if(!inView(a[0],a[1],30))continue;ctx.fillStyle='#708570';rr(a[0]-9,a[1]-8,18,18,4);ctx.fillStyle='#c3d3b6';circ(a[0],a[1],5);ctx.strokeStyle='#3b5d46';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(a[0]-3,a[1]+Math.sin(time*3)*3);ctx.lineTo(a[0]+3,a[1]-Math.sin(time*3)*3);ctx.stroke();
   }
-  if(G.unlocked.bVitrin)drawTransportLabel('SATIŞ GİRİŞİ',COUNTER.x+COUNTER.w-12,COUNTER.y-30,'#f0c78b');
+  for(const r of riders){if(byCourier(r))continue;const edge=Math.min(r.d,r.len-r.d);if(edge>15)continue;const [x,y]=pointOnPath(r.path,r.d);if(inView(x,y,20)){ctx.save();ctx.globalAlpha=1-edge/18;drawCargo(x,y,r);ctx.restore();}}
+  if(selectedRoute&&time<selectedRouteUntil){ctx.save();ctx.strokeStyle=ITEM_COL(selectedRoute.item);ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.setLineDash([5,7]);ctx.lineDashOffset=-time*18;ctx.beginPath();selectedRoute.path.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.restore();}
 }
-let workshopCache={game:null,revision:-1,theme:'',images:[]};
-function drawWorkshopGround(){
-  if(workshopCache.game!==G||workshopCache.revision!==geometryRevision||workshopCache.theme!==G.journal.theme)workshopCache={game:G,revision:geometryRevision,theme:G.journal.theme,images:[]};
-  for(const sh of G.unlocked.carsi?[0,1]:[0]){
-    const oy=sh*CARSI_Y;if(!segmentVisible([30,oy+108],[725,oy+394]))continue;
-    let canvas=workshopCache.images[sh];
-    if(!canvas){canvas=document.createElement('canvas');canvas.width=730;canvas.height=300;const old=ctx;try{ctx=canvas.getContext('2d');ctx.translate(0,-oy-100);paintWorkshopGround(sh);}finally{ctx=old;}workshopCache.images[sh]=canvas;}
-    ctx.drawImage(canvas,0,oy+100,730,300);
-  }
+function visibleTransportHit(x,y){
+  if(courier.plan.length&&Math.hypot(x-courier.x,y-courier.y)<22)return true;
+  for(const st of STATIONS)if(active(st)&&Math.hypot(x-st.x-32,y-st.y-92)<18)return true;
+  for(const id in FARM_LINES)if(beltOn(id)){const a=FARM_LINES[id].path(FARM_LINES[id].m)[0];if(Math.hypot(x-a[0],y-a[1])<18)return true;}
+  return selectedRoute&&time<selectedRouteUntil;
 }
-function paintWorkshopGround(workshopSh){
-  const theme=shopTheme();
-  for(const sh of [workshopSh]){
-    const oy=sh*CARSI_Y;
-    ctx.fillStyle='#bdb29c';rr(30,oy+112,695,274,12);ctx.fillStyle='#d7ccb5';rr(33,oy+115,689,268,10);
-    ctx.strokeStyle='#f7edda44';ctx.lineWidth=1;ctx.beginPath();for(let x=50;x<720;x+=40){ctx.moveTo(x,oy+116);ctx.lineTo(x,oy+382);}for(let y=oy+136;y<oy+380;y+=40){ctx.moveTo(34,y);ctx.lineTo(722,y);}ctx.stroke();
-    for(const st of STATIONS)if(st.shop===sh&&active(st)){
-      ctx.fillStyle='#9b927e55';rr(st.x-51,st.y-42,104,171,10);ctx.fillStyle='#f2e9d5';rr(st.x-52,st.y-45,104,170,10);ctx.strokeStyle=theme.accent;ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(st.x-52,st.y-45,104,170,10);ctx.stroke();
-      ctx.fillStyle=theme.dark;rr(st.x-45,st.y+108,90,15,4);ctx.font='800 8px system-ui,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#fff3d6';ctx.fillText(st.kind==='mill'?'DEĞİRMEN':st.kind==='prep'?'HAMUR TEZGAHI':ITEM_NAME(st.out).toLocaleUpperCase('tr-TR'),st.x,st.y+115);
-    }
-    ctx.fillStyle='#d8ccad';rr(36,oy+387,680,7,3);ctx.fillStyle='#354d41';ctx.font='800 9px system-ui,sans-serif';ctx.textAlign='left';ctx.fillText('ATÖLYE',40,oy+104);ctx.textAlign='right';ctx.fillText('ŞEFFAF KAPAKLI HATLAR · YAYA GEÇİŞİ',711,oy+104);
-  }
-}
+
 function inspectTransportAt(x,y){
+  if(!visibleTransportHit(x,y))return false;
   let best=null,nearest=13*13;
   const routes=transportRoutes();
-  for(const rider of riders){const p=pointOnPath(rider.path,rider.d),dist=(x-p[0])**2+(y-p[1])**2;if(dist<18*18){const route=routes.find(r=>r.line===rider.line&&r.dst===rider.dst&&r.item===rider.item);if(route){best=route;nearest=-1;break;}}}
+  if((courier.plan.length||courier.cargo.length)&&Math.hypot(x-courier.x,y-courier.y)<22){const item=courier.cargo[0]||courier.plan[0]?.items[0];if(item){best=routes.find(r=>r.line===item.line&&r.dst===item.dst&&r.item===item.item);nearest=-1;}}
+  for(const rider of riders){const p=pointOnPath(rider.path,rider.d),dist=(x-p[0])**2+(y-p[1])**2;if(!best&&dist<18*18){const route=routes.find(r=>r.line===rider.line&&r.dst===rider.dst&&r.item===rider.item);if(route){best=route;nearest=-1;break;}}}
   for(const route of routes)for(let i=1;i<route.path.length;i++){
     const a=route.path[i-1],b=route.path[i],dx=b[0]-a[0],dy=b[1]-a[1],d=dx*dx+dy*dy;if(!d)continue;const t=Math.max(0,Math.min(1,((x-a[0])*dx+(y-a[1])*dy)/d)),px=a[0]+t*dx,py=a[1]+t*dy,dist=(x-px)**2+(y-py)**2;
     if(dist<nearest){best=route;nearest=dist;}
   }
   if(!best)return false;selectedRoute=best;selectedRouteUntil=time+12;
   const color=TRANSPORT_STYLE[transportKind(best)].color;
-  modal(`<h2>${ITEM_NAME(best.item)} hattı</h2><p style="color:${color};font-size:17px;font-weight:800">${best.src} → ${routeDestination(best)}</p><p>${routeStatus(best)}</p><p class="note">${cartRoute(best)?'Bu teslimatı küçük servis arabaları taşır.':transportKind(best)==='water'||transportKind(best)==='milk'?'Sıvı, renkli boruda görünür darbelerle ilerler.':'Ürünler cam kapaklı, zemine gömülü bantta görünerek ilerler. Kapakların üzerinden güvenle yürüyebilirsin.'}</p>`,[['Hattı izle','pri',closeModal],['Tüm bağlantılar','',openLogistics]]);return true;
+  modal(`<h2>${ITEM_NAME(best.item)} hattı</h2><p style="color:${color};font-size:17px;font-weight:800">${best.src} → ${routeDestination(best)}</p><p>${routeStatus(best)}</p><p class="note">${cartRoute(best)?'Bu teslimatı tek servis arabası toplu taşır.':transportKind(best)==='water'||transportKind(best)==='milk'?'Pompa ve ambar girişi teslimatı gösterir; uzun boru haritada çizilmez.':'Bu bağlantı otomatik çalışır; haritada yalnızca kısa istasyon bağlantıları gösterilir.'}</p>`,[['Hattı izle','pri',closeModal],['Tüm bağlantılar','',openLogistics]]);return true;
 }
 
 
@@ -2415,14 +2371,45 @@ const critters = [
   ...[[1160,250],[1210,350],[1290,280],[1140,340],[1270,370]].map(([x, y], i) => ({ k:'hen', x, y, t:Math.random(), dir:Math.random() * PI2, peck:0, white:i % 2, box:{ x:1110, y:200, w:240, h:200 } })),
   { k:'hog', x:1080, y:780, dir:1, t:2, curl:0 },
   ...[[880,780],[1380,460]].map(([x, y]) => ({ k:'rab', x, y, z:0, t:1, hop:0, hx:0, hy:0, fx:1 })),
-  { k:'cat', x:66, y:770 },
+  { k:'cat', x:66, y:770, state:'nap', t:7, fx:1, phase:0 },
 ];
+const petLife={food:null,mouse:null,feedT:18,mouseT:38,fed:0,caught:0,game:null};
+const CAT_STOPS=[[190,760],[360,790],[500,765],[500,650],[370,570],[200,550],[480,835]];
+function petMove(a,x,y,speed,dt){const dx=x-a.x,dy=y-a.y,d=Math.hypot(dx,dy),step=speed*dt;a.moving=d>2;if(d>1){a.x+=dx/(d||1)*Math.min(step,d);a.y+=dy/(d||1)*Math.min(step,d);a.fx=dx>=0?1:-1;a.phase=(a.phase||0)+dt*(speed>100?17:9);collide(a,a.k==='cat'?7:4);}return d<7;}
+function updateCafeCat(a,dt){
+  if(petLife.game!==G){Object.assign(petLife,{food:null,mouse:null,feedT:18,mouseT:38,game:G});Object.assign(a,{state:'nap',t:7,fx:1,phase:0,moving:false});}
+  a.t-=dt;petLife.feedT-=dt;petLife.mouseT-=dt;
+  if(petLife.food){petLife.food.age+=dt;if(petLife.food.age>18)petLife.food=null;}
+  if(!petLife.food&&!petLife.mouse&&petLife.feedT<=0&&G.unlocked.cafe){const guest=guests.find(g=>g.state==='eat');if(guest){const table=TABLES[guest.table],x=table.x<500?table.x+43:table.x-43,y=table.y+33;guest.feedUntil=time+.65;petLife.food={x,y,fromX:guest.x,fromY:guest.y-28,age:0};petLife.feedT=26+Math.random()*20;a.state='food';a.t=18;}}
+  if(!petLife.mouse&&!petLife.food&&petLife.mouseT<=0&&a.state!=='eat'){
+    petLife.mouse={k:'mouse',x:235,y:825,tx:500,ty:790,t:0,fx:1,phase:0};petLife.mouseT=55+Math.random()*25;a.state='hunt';a.t=15;
+  }
+  if(petLife.mouse){const m=petLife.mouse;m.t+=dt;let tx=m.tx,ty=m.ty;if(Math.hypot(a.x-m.x,a.y-m.y)<90){tx=Math.max(170,Math.min(585,m.x+(m.x-a.x)*1.5));ty=Math.max(550,Math.min(835,m.y+(m.y-a.y)*1.5));}petMove(m,tx,ty,50,dt);if(m.t>14){petLife.mouse=null;a.state='roam';a.t=0;}}
+  if(a.state==='hunt'&&petLife.mouse){if(petMove(a,petLife.mouse.x,petLife.mouse.y,135,dt)){petLife.mouse=null;petLife.caught++;a.state='pounce';a.t=.65;a.moving=false;chips(a.x,a.y,'#c4b89a',3);}return;}
+  if(a.state==='food'&&petLife.food){if(petMove(a,petLife.food.x,petLife.food.y,80,dt)&&petLife.food.age>.65){petLife.food=null;petLife.fed++;a.state='eat';a.t=2.4;a.moving=false;}return;}
+  if(a.state==='eat'||a.state==='pounce'){a.moving=false;if(a.t<=0){a.state='nap';a.t=4;}return;}
+  if(a.state==='nap'){a.moving=false;if(a.t<=0){a.state='roam';const p=pick(CAT_STOPS);a.tx=p[0];a.ty=p[1];a.t=10;}return;}
+  if(a.state!=='roam'||a.t<=0){a.state='roam';const p=pick(CAT_STOPS);a.tx=p[0];a.ty=p[1];a.t=10;}
+  if(petMove(a,a.tx,a.ty,36,dt)){a.state='nap';a.t=3+Math.random()*5;}
+}
+function drawCafeCat(a){
+  const x=a.x,y=a.y,s=a.fx||1,sleep=a.state==='nap',jump=a.state==='pounce'?Math.sin(Math.max(0,a.t)/.65*Math.PI)*9:0,by=y-jump,bob=a.state==='eat'?Math.sin(time*9)*1.4:0;
+  ctx.fillStyle='#0003';ell(x,y+1,12,3.5);ctx.save();ctx.translate(x,by);ctx.scale(s,1);
+  ctx.fillStyle='#d58a43';ell(0,-5,11,sleep?6:5);circ(9,-8+bob,5);ctx.fillStyle='#ae642c';
+  ctx.beginPath();ctx.moveTo(5,-11+bob);ctx.lineTo(7,-16+bob);ctx.lineTo(10,-12+bob);ctx.lineTo(13,-16+bob);ctx.lineTo(14,-9+bob);ctx.fill();
+  ctx.strokeStyle='#d58a43';ctx.lineWidth=3;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(-10,-5);ctx.quadraticCurveTo(-20,-11+Math.sin(time*2)*3,-15,sleep?1:-13);ctx.stroke();
+  if(!sleep){const leg=a.moving?Math.sin(a.phase)*2:0;ctx.fillStyle='#b46e32';ctx.fillRect(-7,-3,3,5+leg);ctx.fillRect(4,-3,3,5-leg);ctx.fillStyle='#24382a';circ(10,-9+bob,1);ctx.fillStyle='#edc5a1';circ(13,-6+bob,1.8);}else{ctx.strokeStyle='#4b3627';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(9,-8);ctx.lineTo(12,-8);ctx.stroke();}
+  ctx.restore();
+}
+function drawCafeMouse(m){if(!inView(m.x,m.y,20))return;const s=m.fx||1;ctx.fillStyle='#0002';ell(m.x,m.y+1,7,2);ctx.strokeStyle='#a69a91';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(m.x-s*5,m.y-2);ctx.quadraticCurveTo(m.x-s*13,m.y-7,m.x-s*16,m.y-2);ctx.stroke();ctx.fillStyle='#8a8177';ell(m.x,m.y-3,6,3);circ(m.x+s*5,m.y-4,2.5);circ(m.x+s*3,m.y-7,2);ctx.fillStyle='#2b2724';circ(m.x+s*6,m.y-4.5,.7);}
+function drawCatSnack(){const f=petLife.food;if(!f)return;let x=f.x,y=f.y;if(f.age<.65){const t=f.age/.65;x=f.fromX+(f.x-f.fromX)*t;y=f.fromY+(f.y-f.fromY)*t-Math.sin(t*Math.PI)*28;}ctx.fillStyle='#bd8b45';circ(x,y,2.7);ctx.fillStyle='#e8c787';circ(x-1,y-1,1);}
+
 function nearPeople(a, r) { return [P, ...gatherers].some(e => dist2(e, a.x, a.y) < r * r); }
 const WILD = { x0:SHOP_W + 40, x1:W - 50, y0:150, y1:850 };
 function updateCritters(dt) {
   for (const a of critters) {
     if (a.k === 'fly') { a.x = a.ax + Math.sin(time * .7 + a.ph) * 42 + Math.sin(time * 1.9 + a.ph) * 10; a.y = a.ay + Math.sin(time * 1.1 + a.ph * 2) * 26; continue; }
-    if (a.k === 'cat') continue;
+    if (a.k === 'cat') {updateCafeCat(a,dt);continue;}
     if (a.k === 'bird') {
       if (a.state === 'ground') {
         if ((a.t -= dt) <= 0) { a.t = rndIn(.4, 1.6); a.hop = .25; a.fx = Math.random() < .5 ? -1 : 1; }
@@ -2848,6 +2835,7 @@ function drawPerson(e, o) {
   else { ctx.fillStyle = o.hair; ctx.beginPath(); ctx.arc(x, by - 45, 9, Math.PI, 0); ctx.fill(); if (e.fy < -.3) circ(x, by - 43, 8.5); }
   if (o.cap) { ctx.fillStyle = o.cap; ctx.beginPath(); ctx.arc(x, by - 47, 8.6, Math.PI, 0); ctx.fill(); ctx.fillRect(x - 2, by - 48, 12 * (e.fx >= 0 ? 1 : -1), 3); }
   if (e.fy >= -.3) { ctx.fillStyle = '#1a1410'; circ(x - 3 + e.fx * 2, by - 42, 1.2); circ(x + 3 + e.fx * 2, by - 42, 1.2); }
+  if(e.feedUntil>time){ctx.strokeStyle=o.dress;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x+7,by-29);ctx.lineTo(x+17,by-35);ctx.stroke();ctx.fillStyle=o.skin;circ(x+18,by-36,2.5);}
   if (o.tool) drawTool(e, o.tool, o.tier || 0, by);
   return by;
 }
@@ -3365,15 +3353,7 @@ function drawCritter(a) {
     ctx.beginPath(); ctx.ellipse(x + 3 * f, y - 1, 3.6 * f + .6, 2.6, .4, 0, PI2); ctx.fill();
     ctx.fillStyle = '#2a2420'; ctx.fillRect(x - .6, y - 3, 1.2, 5); return;
   }
-  if (a.k === 'cat') {   // fırın kedisi odun yığınının yanında uyur, kuyruğu kıpırdar
-    const y = a.y, br = Math.sin(time * 2) * .6;
-    ctx.fillStyle = 'rgba(0,0,0,.25)'; ell(x, y + 1, 12, 3.5);
-    ctx.fillStyle = '#d98a3a'; ell(x, y - 5, 11, 6 + br); circ(x + 9, y - 8, 5);
-    ctx.fillStyle = '#b86a2a'; ctx.beginPath(); ctx.moveTo(x + 6, y - 12); ctx.lineTo(x + 7.5, y - 16); ctx.lineTo(x + 10, y - 12.5); ctx.fill(); ctx.beginPath(); ctx.moveTo(x + 10, y - 12.5); ctx.lineTo(x + 13, y - 15.5); ctx.lineTo(x + 13.5, y - 10); ctx.fill();
-    ctx.strokeStyle = '#d98a3a'; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x - 10, y - 3); ctx.quadraticCurveTo(x - 18, y + Math.sin(time * 1.6) * 4, x - 12, y + 3); ctx.stroke();
-    if (Math.sin(time) > .3) txt('z', x + 14, y - 20 - (time % 1) * 6, 8, '#f7efe2');
-    return;
-  }
+  if(a.k==='cat'){drawCafeCat(a);return;}
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ell(x, a.y + 1, a.k === 'hog' ? 9 : 6, 2.5);
   if (a.k === 'bird') {
     const y = a.y - a.z, s = a.fx;
@@ -3520,7 +3500,6 @@ function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#120e0b'; ctx.fillRect(0, 0, cv.width, cv.height);
   ctx.setTransform(k, 0, 0, k, (vw / 2 - cam.x * zoom) * dpr, (vh / 2 - cam.y * zoom) * dpr);
   drawWorldLayer(floor);
-  drawWorkshopGround();
   if (G.unlocked.cafe) {
     ctx.fillStyle = ({classic:'#78563544',sage:'#557b5144',rose:'#ab687d44'})[G.decor];
     rr(385,550,220,310,14);
@@ -3588,7 +3567,8 @@ function render() {
   if (G.unlocked.garson) L.push([GAR.y, drawGarson]);
   if (G.unlocked.kalfa && KALFA.st) L.push([KALFA.y, drawKalfa]);
   if (ORDER) { L.push([BASKET.y + 6, drawBasket]); L.push([VIP_POS.y, drawVip]); }
-  for(const rider of riders)if(cartRoute(rider)){const [x,y]=pointOnPath(rider.path,rider.d);if(inView(x,y,35))L.push([y,()=>drawCargo(x,y,rider,true)]);}
+  if(courier.plan.length||courier.cargo.length)L.push([courier.y,drawCourier]);
+  if(petLife.mouse)L.push([petLife.mouse.y,()=>drawCafeMouse(petLife.mouse)]);
   // fırıncı da malzemeyi önünde ittiği el arabasında taşır (araba arkada kalıyorsa önce o çizilir)
   L.push([P.y, () => {
     if (!G.carry.length) { drawBaker(P); return; }
@@ -3645,19 +3625,20 @@ function render() {
     const t = p.t, e = t * (2 - t), x = p.x0 + (p.x1 - p.x0) * e, y = p.y0 + (p.y1 - p.y0) * e - Math.sin(Math.PI * t) * 26;
     if (p.kind === 'coin') coin(x, y, 5); else drawItem(x, y, p.type, .95);
   }
+  drawCatSnack();
   for (const s of speech) {
     const hy=s.e===P||s.e.want?108:s.e.m||s.e.k==='hen'?55:80;
-    const font=Math.max(12,12/zoom),lh=font*1.3,maxW=Math.min(210,vw/zoom-32);
+    const font=Math.max(11,11/zoom),lh=font*1.3,maxW=Math.min(175,vw/zoom-32);
     ctx.font=`800 ${font}px system-ui,sans-serif`;
     const lines=[];let row='';for(const word of s.text.split(' ')){const next=row?row+' '+word:word;if(ctx.measureText(next).width>maxW&&row){lines.push(row);row=word;}else row=next;}if(row)lines.push(row);
     const w=Math.max(...lines.map(t=>ctx.measureText(t).width))+18,bh=lines.length*lh+12;
     const left=cam.x-vw/(2*zoom)+8,right=cam.x+vw/(2*zoom)-8;
     const x=Math.max(left+w/2,Math.min(right-w/2,s.e.x)),y=s.e.y-hy;
-    ctx.globalAlpha=Math.min(1,(s.life-s.t)*3,s.t*8);
+    const fade=Math.min(1,(s.life-s.t)*3,s.t*8);ctx.globalAlpha=fade*.58;
     ctx.fillStyle='rgba(0,0,0,.25)';rr(x-w/2+2,y-bh+2,w,bh,10);
     ctx.fillStyle='#fffaf0';rr(x-w/2,y-bh,w,bh,10);
     ctx.beginPath();ctx.moveTo(x-5,y-1);ctx.lineTo(x,y+7);ctx.lineTo(x+5,y-1);ctx.fill();
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#3a2414';
+    ctx.globalAlpha=fade*.88;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#3a2414';
     lines.forEach((text,i)=>ctx.fillText(text,x,y-bh+6+lh*(i+.5)));ctx.globalAlpha=1;
   }
   for (const f of floats) { ctx.globalAlpha = Math.min(1, 2.2 - f.t * 2); txt(f.text, f.x, f.y - f.t * 30, 14, f.col); ctx.globalAlpha = 1; }
@@ -3891,7 +3872,7 @@ const HOW = `<ol>
   <li><b>Kafe:</b> açınca misafirler masalara oturur. İstedikleri ürünü masanın yanına götür; yiyip öderler ve masayı kirli bırakırlar. Kirli masanın yanında durarak sil. <b>Garson</b> tutarsan bunları o yapar.</li>
   <li><b>Fazla ürün tezgahı:</b> vitrin dolunca fırında biriken ürünleri ön kapının yanındaki tezgaha koy (çırak da koyar). Sokaktan gelenler kendileri alıp parasını bırakır.</li>
   <li><b>Köy panosu</b>: süre sınırı olmayan siparişler al, müdavimlerini tanı, ürün ustalığı rozetleri ve tasarım temaları kazan.</li>
-  <li><b>Görünür taşıma</b>: ürünler cam kapaklı bantlarda, sıvılar ayrı borularda ilerler. Uzak teslimatları küçük arabalar taşır. Bir hatta kısa dokunarak inceleyebilirsin.</li>
+  <li><b>Görünür taşıma</b>: ürünler kısa çıkış bantlarında görünür. Tek servis arabası ürünleri toplu taşır; hammadde otomasyonu uzun hat çizmeden çalışır. Bir hatta kısa dokunarak inceleyebilirsin.</li>
   <li><b>Akış</b>: otomatik sevkiyatların kaynağını, hedefini ve yoldaki miktarı gösterir. Bir bağlantıya dokununca yalnızca o yol kısa süre haritada görünür.</li>
   <li><b>Çiftlik makineleri</b> (usta masası → Çiftlik): su pompası, yumurta toplama ve sağım makinesi hammaddeyi kendiliğinden ambara getirir; traktör ve biçerdöver buğdayı biçer.</li>
   <li><b>Yeni arazi:</b> çiftliğin güneyindeki çit kapısından geçilir: arı kovanları (bal), fındık bahçesi, zeytinlik ve biçerdöverle büyük buğday tarlası.</li>
