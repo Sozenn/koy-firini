@@ -27,7 +27,7 @@ html,body,#app{height:100%;height:100dvh}
 #recipe{top:112px;max-width:calc(100% - 24px);white-space:normal;flex-wrap:wrap}
 #statusBtn{font-size:11px!important}
 #modal{padding-top:max(16px,env(safe-area-inset-top));padding-bottom:max(16px,env(safe-area-inset-bottom));z-index:30}
-#desk{z-index:25}
+#app #desk{z-index:25}
 @media(max-width:420px){#cash{font-size:18px}#daypill{font-size:11px}#hud{gap:5px}#goal{font-size:11px}#recipe{font-size:11px}}
 @media(max-height:480px){#hud .hl{flex-direction:row}#mobileTools{grid-template-columns:repeat(4,44px);gap:4px}#mobileTools button{width:44px;height:44px}#mobileTools #pauseBtn{grid-column:span 2;width:92px}#recipe{top:90px}}
 </style></head>
@@ -183,7 +183,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 const $ = s => document.querySelector(s);
 const cv = $('#cv'), ctx = cv.getContext('2d'), app = $('#app');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v12';
+const GAME_VERSION = 'v13';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -1359,69 +1359,49 @@ function beltPaths() {
   for (const id in FARM_LINES) if (G.unlocked[id]) out.push(FARM_LINES[id].path(FARM_LINES[id].m));
   return out;
 }
-// Asma konveyör: yer düzleminde yalnızca gölge ve istasyon yükselticileri vardır.
-// Ortak hatlar birleştirilir; aynı ray her istasyon için tekrar boyanmaz.
-const BELT_HEIGHT = 78;
-let beltArtCache = {key:'', segments:[], ports:[]};
+// Taşıma ağı zeminin altında; yalnızca kısa giriş/çıkış modülleri görünür.
+// Üretim ve teslimat yolları aynı kalır, yürüyüş alanına ray veya ayak eklenmez.
+let beltArtCache = {key:'', ports:[]};
 function conveyorArt() {
-  const paths=beltPaths(), key=JSON.stringify(paths);
-  if (key===beltArtCache.key) return beltArtCache;
-  const groups=new Map(), diagonal=[], ports=new Map();
-  for (const path of paths) {
-    for (const p of [path[0],path[path.length-1]]) ports.set(p.join(','),p);
-    for (let i=1;i<path.length;i++) {
-      const a=path[i-1], b=path[i]; if(a[0]===b[0] && a[1]===b[1])continue;
-      const vertical=a[0]===b[0], horizontal=a[1]===b[1];
-      if(!vertical&&!horizontal){diagonal.push([a,b]);continue;}
-      const axis=vertical?1:0, fixed=a[1-axis], k=axis+':'+fixed;
-      if(!groups.has(k))groups.set(k,{axis,fixed,spans:[]});
-      groups.get(k).spans.push([Math.min(a[axis],b[axis]),Math.max(a[axis],b[axis])]);
+  const paths=beltPaths(),key=JSON.stringify(paths);
+  if(key===beltArtCache.key)return beltArtCache;
+  const ports=new Map();
+  for(const path of paths){
+    for(const [index,next] of [[0,1],[path.length-1,path.length-2]]){
+      const a=path[index],b=path[next];if(!a||!b)continue;
+      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);if(!len)continue;
+      // Yakın hammadde kutuları tek küçük servis modülünü paylaşır.
+      const k=Math.round(a[0]/32)+':'+Math.round(a[1]/24);
+      if(!ports.has(k))ports.set(k,{x:a[0],y:a[1],dx:(b[0]-a[0])/len,dy:(b[1]-a[1])/len});
     }
   }
-  const segments=diagonal;
-  for(const {axis,fixed,spans} of groups.values()){
-    spans.sort((a,b)=>a[0]-b[0]);const merged=[];
-    for(const span of spans){const last=merged[merged.length-1];if(last&&span[0]<=last[1]+.1)last[1]=Math.max(last[1],span[1]);else merged.push(span.slice());}
-    for(const [lo,hi] of merged)segments.push(axis===0?[[lo,fixed],[hi,fixed]]:[[fixed,lo],[fixed,hi]]);
-  }
-  return beltArtCache={key,segments,ports:[...ports.values()]};
+  return beltArtCache={key,ports:[...ports.values()]};
 }
-function beltInView(a,b) {
-  const hx=vw/(2*zoom)+30,hy=vh/(2*zoom)+BELT_HEIGHT+30;
-  return Math.max(a[0],b[0])>cam.x-hx && Math.min(a[0],b[0])<cam.x+hx && Math.max(a[1],b[1])>cam.y-hy && Math.min(a[1],b[1])<cam.y+hy;
+function beltInView(a,b=a) {
+  const hx=vw/(2*zoom)+24,hy=vh/(2*zoom)+24;
+  return Math.max(a[0],b[0])>cam.x-hx&&Math.min(a[0],b[0])<cam.x+hx&&Math.max(a[1],b[1])>cam.y-hy&&Math.min(a[1],b[1])<cam.y+hy;
 }
 function drawBeltGround() {
-  const art=conveyorArt();ctx.save();ctx.lineCap='round';
-  for(const [a,b] of art.segments){if(!beltInView(a,b))continue;ctx.strokeStyle='rgba(0,0,0,.12)';ctx.lineWidth=16;ctx.beginPath();ctx.moveTo(a[0]+7,a[1]+5);ctx.lineTo(b[0]+7,b[1]+5);ctx.stroke();}
-  for(const [x,y] of art.ports){if(!beltInView([x,y],[x,y]))continue;
-    ctx.fillStyle='#303d43';rr(x-7,y-BELT_HEIGHT,14,BELT_HEIGHT,4);
-    ctx.fillStyle='#73858b';rr(x-5,y-BELT_HEIGHT,3,BELT_HEIGHT-4,1);
-    ctx.fillStyle='#263136';rr(x-12,y-5,24,10,3);
-    ctx.fillStyle='#d3ad55';rr(x-4,y-16,8,3,1);
-  }ctx.restore();
-}
-function drawBelts() {
-  const art=conveyorArt(), h=BELT_HEIGHT;ctx.save();
-  for(const [a,b] of art.segments){
-    if(!beltInView(a,b))continue;
-    const dx=b[0]-a[0],dy=b[1]-a[1],len=Math.hypot(dx,dy),nx=-dy/len,ny=dx/len;
-    // Transparanlık yalnızca oyuncunun başını örten ray kesiminde uygulanır.
-    const u=Math.max(0,Math.min(1,((P.x-a[0])*dx+(P.y-36-a[1]+h)*dy)/(len*len)));
-    ctx.globalAlpha=Math.hypot(P.x-a[0]-u*dx,P.y-36-(a[1]+u*dy-h))<38?.42:1;
-    const stroke=(color,width,shift=0)=>{ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(a[0],a[1]-h+shift);ctx.lineTo(b[0],b[1]-h+shift);ctx.stroke();};
-    stroke('#142027',21,5);stroke('#73868e',21);stroke('#b1c0c5',17);stroke('#263c43',13);
-    // Kauçuk üzerindeki enine kaburgalar: aynı hızda kayar, makaralar döner.
-    const phase=(time*90*(1+.15*G.lv.bHiz))%14;
-    ctx.strokeStyle='#486168';ctx.lineWidth=2;ctx.lineCap='butt';
-    for(let d=phase;d<len;d+=14){const x=a[0]+dx*d/len,y=a[1]+dy*d/len-h;ctx.beginPath();ctx.moveTo(x+nx*5,y+ny*5);ctx.lineTo(x-nx*5,y-ny*5);ctx.stroke();}
-    ctx.strokeStyle='#d8e1df';ctx.lineWidth=1;
-    for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(a[0]+nx*9*side,a[1]-h+ny*9*side);ctx.lineTo(b[0]+nx*9*side,b[1]-h+ny*9*side);ctx.stroke();}
-    for(const [x,yy] of [a,b]){const y=yy-h;ctx.fillStyle='#9eafb5';circ(x,y,7);ctx.fillStyle='#354b53';circ(x,y,4.5);ctx.strokeStyle='#f0c666';ctx.lineWidth=1.5;const ang=time*5;ctx.beginPath();ctx.moveTo(x-Math.cos(ang)*3,y-Math.sin(ang)*3);ctx.lineTo(x+Math.cos(ang)*3,y+Math.sin(ang)*3);ctx.stroke();}
+  ctx.save();
+  for(const p of conveyorArt().ports){
+    if(!beltInView([p.x,p.y]))continue;
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(Math.atan2(p.dy,p.dx));
+    ctx.fillStyle='rgba(0,0,0,.22)';rr(-9,-5,23,12,4);
+    ctx.fillStyle='#79654b';rr(-10,-7,23,12,3);
+    ctx.fillStyle='#3b4747';rr(-8,-5,18,8,2);
+    ctx.fillStyle='#b0ada0';ctx.fillRect(-8,-6,18,1);ctx.fillRect(-8,3,18,1);
+    // 18 birimlik kısa kauçuk ağız; uzun hatlar ve dikey kuleler çizilmez.
+    const phase=(time*12)%5;ctx.strokeStyle='#6b7a73';ctx.lineWidth=1;
+    for(let x=-8+phase;x<10;x+=5){ctx.beginPath();ctx.moveTo(x,-3);ctx.lineTo(x,2);ctx.stroke();}
+    ctx.fillStyle='#9ca68b';circ(-8,-1,2);ctx.fillStyle='#d5b263';circ(10,-1,2);
+    ctx.restore();
   }
-  ctx.globalAlpha=1;
-  // Tavandan sarkan ince askılar; yürüyüş düzleminde ayak/engel yok.
-  for(const [x,y] of art.ports){if(!beltInView([x,y],[x,y]))continue;ctx.strokeStyle='#91a0a8';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-8,y-h-18);ctx.lineTo(x-8,y-h+2);ctx.moveTo(x+8,y-h-18);ctx.lineTo(x+8,y-h+2);ctx.stroke();ctx.fillStyle='#dbc17d';rr(x-13,y-h-20,26,4,2);}
-  for(const r of riders){const [x,y]=pointOnPath(r.path,r.d);if(!beltInView([x,y],[x,y]))continue;ctx.fillStyle='rgba(0,0,0,.3)';ell(x+1,y-h+6,7,3);drawItem(x,y-h+5,r.item,.8);}
+  // Paket sadece modüle girerken/çıkarken kısa süre görünür. Ara taşıma zeminin altında.
+  for(const r of riders){
+    const edge=Math.min(r.d,r.len-r.d);if(edge>18)continue;
+    const [x,y]=pointOnPath(r.path,r.d);if(!beltInView([x,y]))continue;
+    ctx.globalAlpha=Math.max(0,1-edge/18);drawItem(x,y+3,r.item,.65);
+  }
   ctx.restore();
 }
 
@@ -2430,8 +2410,8 @@ function refreshDesk() {
     b.classList.toggle('dot', can && b.dataset.tab !== deskTab);
   });
 }
-function openDesk() { deskOpen = true; deskEl.hidden = false; renderDesk(); }
-function closeDesk() { deskOpen = false; deskEl.hidden = true; }
+function openDesk() { deskOpen = true; deskEl.hidden = false; $('#mobileTools').hidden = true; joy = null; renderDesk(); }
+function closeDesk() { deskOpen = false; deskEl.hidden = true; $('#mobileTools').hidden = false; }
 $('#deskTabs').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   deskTab = b.dataset.tab; document.querySelectorAll('#deskTabs button').forEach(x => x.classList.toggle('on', x === b));
@@ -3444,7 +3424,6 @@ function render() {
   }]);
   L.sort((a, b) => a[0] - b[0]); for (const [, f] of L) f();
   drawLocks();
-  drawBelts();
   drawLighting();
 
   // üst katman
