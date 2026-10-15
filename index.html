@@ -183,7 +183,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 const $ = s => document.querySelector(s);
 const cv = $('#cv'), ctx = cv.getContext('2d'), app = $('#app');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v13';
+const GAME_VERSION = 'v14';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -3683,6 +3683,33 @@ tools.appendChild($('#pauseBtn')); $('#pauseBtn').appendChild(document.createTex
 $('#pauseBtn').addEventListener('click', openMenu);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { paused = true; joy = null; save(); } else { paused = !modalEl.hidden; lastT = performance.now(); } });
 addEventListener('pagehide', save);
+// Ana ekrandaki uygulama çoğu zaman yeniden yüklenmeden devam eder.
+let updateCheckRunning = false, lastUpdateCheck = 0;
+async function checkGameUpdate() {
+  if (document.hidden || updateCheckRunning || Date.now() - lastUpdateCheck < 30000) return;
+  updateCheckRunning = true; lastUpdateCheck = Date.now();
+  try {
+    const response = await fetch('./index.html', {cache: 'no-store'});
+    if (!response.ok) return;
+    const version = (await response.text()).match(/const GAME_VERSION = '(v\d+)'/);
+    if (!version || Number(version[1].slice(1)) <= Number(GAME_VERSION.slice(1)) || $('#gameUpdate')) return;
+    const button = document.createElement('button');
+    button.id = 'gameUpdate'; button.textContent = version[1] + ' hazır · Kaydet ve güncelle';
+    button.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:10000;max-width:92vw;background:#195c40;color:white;padding:12px 16px;border:2px solid #fff;border-radius:14px;box-shadow:0 3px 18px #0006';
+    button.onclick = () => {
+      save();
+      try { if (localStorage.getItem(KEY) !== JSON.stringify(G)) throw new Error('save'); }
+      catch (_) { button.textContent = 'Kayıt yapılamadı; güncelleme bekletildi'; return; }
+      location.reload();
+    };
+    document.body.appendChild(button);
+  } catch (_) { /* Çevrimdışıyken kayıtlı oyun devam eder. */ }
+  finally { updateCheckRunning = false; }
+}
+addEventListener('pageshow', checkGameUpdate);
+addEventListener('online', checkGameUpdate);
+document.addEventListener('visibilitychange', checkGameUpdate);
+
 new ResizeObserver(resize).observe(app);
 new ResizeObserver(() => { $('#recipe').style.top = ($('#hud').offsetHeight + 12) + 'px'; }).observe($('#hud'));
 
@@ -3721,7 +3748,7 @@ window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude
 
 <script>
 // Uygulama: internetsiz çalışma ve kaydın kalıcı saklanması
-if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'}).then(reg => { const check = () => { if (!document.hidden) reg.update().catch(() => {}); }; document.addEventListener('visibilitychange', check); addEventListener('online', check); check(); }).catch(() => {}));
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
 </script>
 </body>
