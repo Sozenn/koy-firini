@@ -14,7 +14,8 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <style>html,body{margin:0;padding:0;background:#120e0b}[hidden]{display:none!important}
 /* ana ekrandan açılınca çentik ve alt çubuk altında kalmasın */
-#hud{padding-top:max(10px,env(safe-area-inset-top))!important;padding-left:max(16px,env(safe-area-inset-left))!important;padding-right:max(16px,env(safe-area-inset-right))!important}</style>
+#hud{padding-top:max(10px,env(safe-area-inset-top))!important;padding-left:max(16px,env(safe-area-inset-left))!important;padding-right:max(16px,env(safe-area-inset-right))!important}.flowGroup{margin:10px 0;border:1px solid var(--line);border-radius:10px;padding:10px}.flowGroup summary{cursor:pointer;font-weight:800}.flowRoute{display:block;width:100%;text-align:left;padding:10px;margin-top:8px;border:1px solid var(--line);border-radius:9px;background:#27362b;color:var(--ink)}.flowRoute small{display:block;margin-top:4px;color:var(--muted);line-height:1.4}#flowBtn{font-size:12px!important}
+</style>
 <style>
 html,body,#app{height:100%;height:100dvh}
 #hud{flex-wrap:wrap;align-items:center}
@@ -170,7 +171,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
   <section id="desk" hidden aria-label="Usta masası">
     <div class="dhead"><b>Usta masası</b><span><i class="coin"></i><em id="deskMoney" style="font-style:normal">0</em></span><button id="deskClose" aria-label="Kapat">×</button></div>
     <nav id="deskTabs">
-      <button data-tab="gear" class="on">Ekipman</button><button data-tab="shop">Fırın</button><button data-tab="staff">Çalışan</button><button data-tab="belt">Bantlar</button>
+      <button data-tab="gear" class="on">Ekipman</button><button data-tab="shop">Fırın</button><button data-tab="staff">Çalışan</button><button data-tab="belt">Sevkiyat</button>
       <button data-tab="farm">Çiftlik</button><button data-tab="sube">Şube</button><button data-tab="guild">Ödül</button>
     </nav>
     <div id="deskList"></div>
@@ -183,7 +184,7 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 const $ = s => document.querySelector(s);
 const cv = $('#cv'), ctx = cv.getContext('2d'), app = $('#app');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v14';
+const GAME_VERSION = 'v15';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -280,8 +281,8 @@ const OFFERS = [
   { id:'stand', where:'floor', x:170, y:770, cost:1500, req:'cafe', label:'Kendin al tezgahı', icon:'ekmek', optional:true },
   { id:'standUp', where:'desk', tab:'shop', up:true, base:500, mul:2, max:4, req:'stand', label:'Tezgah rafı', desc:() => `Fazla ürün tezgahı ${standCap()} → ${standCap() + 6} ürün alır` },
   // Çiftlik makineleri: toplamayı otomatikleştirir (sıradaki hedefte görünmez)
-  { id:'pompa', where:'desk', tab:'farm', optional:true, cost:2500, req:'S4', label:'Su pompası', desc:'Kuyuya motor takılır: su borudan kendiliğinden ambara akar.' },
-  { id:'kBant', where:'desk', tab:'farm', optional:true, cost:3000, req:'S4', label:'Kümes bandı', desc:'Yuvalardaki yumurtalar bantla ambara gelir.' },
+  { id:'pompa', where:'desk', tab:'farm', optional:true, cost:2500, req:'S4', label:'Su pompası', desc:'Kuyu → Ambar: su otomatik sevk edilir. Akış ekranında yoldaki suyu ve hedefi görebilirsin.' },
+  { id:'kBant', where:'desk', tab:'farm', optional:true, cost:3000, req:'S4', label:'Yumurta toplama', desc:'Yuvalardaki yumurtalar bantla ambara gelir.' },
   { id:'sagim', where:'desk', tab:'farm', optional:true, cost:4000, req:'S4', label:'Sağım makinesi', desc:'İnekler makineyle sağılır, süt boruyla ambara akar.' },
   { id:'kumes2', where:'desk', tab:'farm', optional:true, cost:2000, req:'S4', label:'Kümesi büyüt', desc:'Kümese 2 yeni yuva eklenir.' },
   { id:'ahir2', where:'desk', tab:'farm', optional:true, cost:3000, req:'S4', label:'Ahırı büyüt', desc:'Ahıra 2 yeni inek gelir.' },
@@ -310,17 +311,17 @@ const OFFERS = [
   { id:'garsonSpd', where:'desk', tab:'staff', up:true, base:300, mul:2, max:5, req:'garson', label:'Garson hızı', desc:() => 'Garson %12 daha hızlı yürür' },
   { id:'ambar', where:'desk', tab:'shop', up:true, base:40,  mul:1.9, max:6, req:null,   label:'Ambar',      desc:() => `Ambardaki her kutu ${depotCap()} → ${depotCap() + 10} hammadde alır` },
   // Bantlar: taşımayı otomatikleştirir; talebi olan istasyona/ürüne öncelik verir (optional: HUD'daki sıradaki hedefte görünmez)
-  { id:'bVitrin', where:'desk', tab:'belt', optional:true, cost:1200, req:'car', label:'Vitrin bandı',
-    desc:'Fırınların tepsisindeki ürünleri vitrine taşır. Önce müşterinin beklediği ürün.' },
-  { id:'bMill',   where:'desk', tab:'belt', optional:true, cost:1500, req:'coop', label:'Değirmen bandı',
+  { id:'bVitrin', where:'desk', tab:'belt', optional:true, cost:1200, req:'car', label:'Ürün sevkiyatı',
+    desc:'Fırın → Vitrin / Kendin al. Ürünler otomatik sevk edilir; Akış ekranından hedefi izleyebilirsin.' },
+  { id:'bMill',   where:'desk', tab:'belt', optional:true, cost:1500, req:'coop', label:'Buğday sevkiyatı',
     desc:'Ambardaki buğdayı değirmenin kutusuna taşır.' },
-  { id:'bUn',     where:'desk', tab:'belt', optional:true, cost:2200, req:'S3', label:'Un bandı',
+  { id:'bUn',     where:'desk', tab:'belt', optional:true, cost:2200, req:'S3', label:'Un dağıtımı',
     desc:'Değirmenden çıkan unu, talebi olan fırının un kutusuna taşır.' },
-  { id:'bAmbar',  where:'desk', tab:'belt', optional:true, cost:3500, req:'S3', label:'Malzeme bandı',
+  { id:'bAmbar',  where:'desk', tab:'belt', optional:true, cost:3500, req:'S3', label:'Malzeme dağıtımı',
     desc:'Ambardaki su, yumurta, süt ve çileği talebi olan fırınlara taşır.' },
-  { id:'bCarsi',  where:'desk', tab:'belt', optional:true, cost:6000, req:'carsi', label:'Çarşı bandı',
+  { id:'bCarsi',  where:'desk', tab:'belt', optional:true, cost:6000, req:'carsi', label:'Çarşı sevkiyatı',
     desc:'Ambardan Çarşı şubesine malzeme taşır; şubede değirmenden hamur tezgahına un, tezgahtan fırınlara hamur, fırınlardan vitrine ürün akar.' },
-  { id:'bHiz',    where:'desk', tab:'belt', up:true, base:300, mul:2, max:5, req:'bVitrin', label:'Bant hızı',
+  { id:'bHiz',    where:'desk', tab:'belt', up:true, base:300, mul:2, max:5, req:'bVitrin', label:'Sevkiyat hızı',
     desc:() => `Bantlar ${sec(beltInt())} → ${sec(beltInt(G.lv.bHiz + 1))} sn'de bir eşya gönderir` },
   // Çalışan geliştirmeleri
   { id:'cashSpd', where:'desk', tab:'staff', up:true, base:80,  mul:2,   max:6, req:'cash', label:'Kasiyer hızı',
@@ -503,6 +504,7 @@ function normalize(d) {
   if (!['auto','supply','stand','counter'].includes(out.workerPri)) out.workerPri = 'auto';
   if (!['balanced','stand'].includes(out.standMode)) out.standMode = 'balanced';
   if (!['classic','sage','rose'].includes(out.decor)) out.decor = 'classic';
+  out.lightGraphics = out.lightGraphics === true;
   out.viewScale = Number.isFinite(out.viewScale) ? Math.max(.6,Math.min(1.3,out.viewScale)) : 1;
   return out;
 }
@@ -640,7 +642,7 @@ let vw = 0, vh = 0, dpr = 1, zoom = 1, cam = { x:300, y:400 }, floor = null;
 function resize() {
   const w = app.clientWidth, h = app.clientHeight;
   if (w < 2 || h < 2) return;
-  vw = w; vh = h; dpr = Math.min(devicePixelRatio || 1, 2);
+  vw = w; vh = h; dpr = Math.min(devicePixelRatio || 1, G?.lightGraphics ? 1 : Math.min(vw,vh) < 600 ? 1.5 : 2);
   cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
   zoom = Math.min(vw / 370, vh / 600) * (G?.viewScale || 1);
   buildFloor();
@@ -648,8 +650,9 @@ function resize() {
 // Zemin bir kez çizilip önbelleğe alınır. Derinlik hissi: tek yönden ışık (sol üst), sağ-alta düşen gölgeler,
 // kabartmalı karolar, damarlı ahşap, duvar diplerinde gölge, sırtları gölgeli tarlalar, kenarlı yollar, katmanlı ağaçlar.
 function buildFloor() {
-  const k = Math.min(zoom * dpr, 2);
-  floor = document.createElement('canvas'); floor.width = Math.ceil(W * k); floor.height = Math.ceil(H * k);
+  const k = Math.min(zoom * dpr, G?.lightGraphics ? 1 : Math.min(vw,vh) < 600 ? 1.25 : 2);
+  if (floor && floor.dataset.scale === String(k)) return;
+  floor = document.createElement('canvas'); floor.dataset.scale = String(k); floor.width = Math.ceil(W * k); floor.height = Math.ceil(H * k);
   const f = floor.getContext('2d'); f.scale(k, k);
   let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const lg = (x0, y0, x1, y1, stops) => { const g = f.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, c]) => g.addColorStop(o, c)); return g; };
@@ -940,7 +943,9 @@ function addGatherer(i) {
     dress:i ? '#5a6e3a' : '#7a5a2a', skin:SKIN[i ? 2 : 0], hair:HAIR[i + 1] });
 }
 
+let geometryRevision = 0, boxesCache = null, boxesGame = null, boxesRevision = -1;
 function boxes() {
+  if (boxesGame === G && boxesRevision === geometryRevision) return boxesCache;
   const b = STATIC_BOX.slice();
   for (const s of STATIONS) if (active(s)) b.push({ x:s.x - 34, y:s.y - 26, w:68, h:44 });
   for (let i = 0; i < cafeTables().length; i++) b.push({ x:TABLES[i].x - 20, y:TABLES[i].y - 12, w:40, h:20 });
@@ -948,6 +953,7 @@ function boxes() {
   else b.push({ x:670, y:CARSI_Y, w:58, h:100 });                       // şube kapalıyken personel kapısı kilitli
   if (!G.unlocked.genis) b.push({ x:GATE.x, y:FARM_S - 8, w:GATE.w, h:14 });   // yeni arazinin kapısı kapalı
   if (G.unlocked.stand) b.push({ x:STAND.x, y:STAND.y, w:STAND.w, h:STAND.d });
+  boxesGame = G; boxesRevision = geometryRevision; boxesCache = b;
   return b;
 }
 function collide(e, r) {
@@ -1309,7 +1315,7 @@ function beltJob(id) {
   return null;
 }
 const BELT_IDS = ['bVitrin', 'bUn', 'bMill', 'bAmbar'];
-const CARSI_BELTS = ['cDepo', 'cUn', 'cHamur', 'cVitrin'];   // hepsi "Çarşı bandı" ile kurulur
+const CARSI_BELTS = ['cDepo', 'cUn', 'cHamur', 'cVitrin'];   // hepsi "Çarşı sevkiyatı" ile kurulur
 const beltOn = id => CARSI_BELTS.includes(id) ? !!(G.unlocked.bCarsi && G.unlocked.carsi) : !!G.unlocked[id];
 function updateBelts(dt) {
   const speedPx = 90 * (1 + .15 * G.lv.bHiz);
@@ -1320,7 +1326,7 @@ function updateBelts(dt) {
     if (beltT[id] < every) continue;
     const job = beltJob(id); if (!job) continue;
     beltT[id] = 0; job.take();
-    riders.push({ item:job.item, dst:job.dst, path:job.path, len:pathLen(job.path), d:0 });
+    riders.push({ line:id, item:job.item, dst:job.dst, path:job.path, len:pathLen(job.path), d:0 });
   }
   for (let i = riders.length - 1; i >= 0; i--) {
     const r = riders[i]; r.d += speedPx * (r.dst === 'depot' ? 1.4 : 1) * dt;
@@ -1359,50 +1365,81 @@ function beltPaths() {
   for (const id in FARM_LINES) if (G.unlocked[id]) out.push(FARM_LINES[id].path(FARM_LINES[id].m));
   return out;
 }
-// Taşıma ağı zeminin altında; yalnızca kısa giriş/çıkış modülleri görünür.
-// Üretim ve teslimat yolları aynı kalır, yürüyüş alanına ray veya ayak eklenmez.
-let beltArtCache = {key:'', ports:[]};
-function conveyorArt() {
-  const paths=beltPaths(),key=JSON.stringify(paths);
-  if(key===beltArtCache.key)return beltArtCache;
-  const ports=new Map();
-  for(const path of paths){
-    for(const [index,next] of [[0,1],[path.length-1,path.length-2]]){
-      const a=path[index],b=path[next];if(!a||!b)continue;
-      const len=Math.hypot(b[0]-a[0],b[1]-a[1]);if(!len)continue;
-      // Yakın hammadde kutuları tek küçük servis modülünü paylaşır.
-      const k=Math.round(a[0]/32)+':'+Math.round(a[1]/24);
-      if(!ports.has(k))ports.set(k,{x:a[0],y:a[1],dx:(b[0]-a[0])/len,dy:(b[1]-a[1])/len});
+// Lojistik: tek tek seçilen bağlantı dışında haritada uzun hat çizilmez.
+let routeCache = null, routeGame = null, routeRevision = -1, selectedRoute = null, selectedRouteUntil = 0;
+const LINE_NAMES = {bMill:'Buğday sevkiyatı',bUn:'Un dağıtımı',bAmbar:'Malzeme dağıtımı',bVitrin:'Ürün sevkiyatı',cDepo:'Çarşı malzemeleri',cUn:'Çarşı unu',cHamur:'Hamur dağıtımı',cVitrin:'Çarşı ürünleri',pompa:'Su pompası',kBant:'Yumurta toplama',sagim:'Sağım makinesi'};
+function transportRoutes() {
+  if (routeGame === G && routeRevision === geometryRevision) return routeCache;
+  const routes = [];
+  const add = (line,src,dst,item,path) => routes.push({line,src,dst,item,path,key:line+':'+dst+':'+item});
+  if (beltOn('bMill')) add('bMill','Ambar','M','bugday',pathDepotTo(ST.M,'bugday'));
+  for (const st of OVENS0) if (active(st)) {
+    if (beltOn('bUn')) add('bUn','Değirmen',st.id,'un',pathUnTo(st));
+    if (beltOn('bAmbar')) for (const m in st.recipe) if (MATS[m]) add('bAmbar','Ambar',st.id,m,pathDepotTo(st,m));
+    if (beltOn('bVitrin')) {
+      add('bVitrin',st.name,'counter',st.out,pathToCounter(st));
+      if (G.unlocked.stand) add('bVitrin',st.name,'stand',st.out,pathToStand(st));
     }
   }
-  return beltArtCache={key,ports:[...ports.values()]};
+  if (beltOn('cDepo')) for (const st of STATIONS) if (st.shop === 1 && active(st)) for (const m in st.recipe) if (MATS[m]) add('cDepo','Ambar',st.id,m,pathDepotToCarsi(st,m));
+  if (beltOn('cUn')) add('cUn',ST.M2.name,'H','un',pathInter(ST.M2,ST.H,'un',TRUNK2_UN));
+  for (const st of OVENS1) if (active(st)) {
+    if (beltOn('cHamur')) add('cHamur',ST.H.name,st.id,'hamur',pathInter(ST.H,st,'hamur',TRUNK2_HAM));
+    if (beltOn('cVitrin')) add('cVitrin',st.name,'counter',st.out,pathToCounter2(st));
+  }
+  for (const id in FARM_LINES) if (beltOn(id)) { const fl=FARM_LINES[id]; add(id,LINE_NAMES[id],'depot',fl.m,fl.path(fl.m)); }
+  routeGame=G;routeRevision=geometryRevision;return routeCache=routes;
 }
-function beltInView(a,b=a) {
-  const hx=vw/(2*zoom)+24,hy=vh/(2*zoom)+24;
-  return Math.max(a[0],b[0])>cam.x-hx&&Math.min(a[0],b[0])<cam.x+hx&&Math.max(a[1],b[1])>cam.y-hy&&Math.min(a[1],b[1])<cam.y+hy;
+const routeDestination = r => r.dst === 'counter' ? (r.line==='cVitrin'?'Çarşı vitrini':'Vitrin') : r.dst === 'stand' ? 'Kendin al' : r.dst === 'depot' ? 'Ambar' : ST[r.dst].name;
+function routeCount(r) { let count=0;for(const rider of riders) if(rider.line===r.line && rider.dst===r.dst && rider.item===r.item) count++;return count; }
+function routeStatus(r) {
+  const n=routeCount(r);if(n)return n+' yolda';
+  const room=r.dst==='depot'?depotRoom(r.item):r.dst==='counter'?crateRoom(r.item):r.dst==='stand'?standTotal()+standIncoming()<standTarget():binRoom(ST[r.dst],r.item);
+  if(!room)return 'Hedef dolu · bekliyor';
+  if(r.dst==='stand'&&G.counter[r.item]<2)return 'Önce vitrine 2 ürün ayrılır';
+  return 'Kaynak / sevk sırası bekleniyor';
 }
+function openLogistics() {
+  if (deskOpen) closeDesk();
+  const routes=transportRoutes(),groups=new Map();
+  routes.forEach((r,i)=>{if(!groups.has(r.line))groups.set(r.line,[]);groups.get(r.line).push([r,i]);});
+  modal('<h2>Otomatik sevkiyat</h2><p>Alınan bantlar çalışmaya devam eder. Malzemeler otomatik taşınır; yürüyüş alanı açık kalır.</p>'+(!routes.length?'<p>Henüz otomatik sevkiyat açılmadı. Usta masasından alabilirsin.</p>':'')+[...groups].map(([line,rows])=>`<details class="flowGroup"><summary>${LINE_NAMES[line]} · ${rows.reduce((n,[r])=>n+routeCount(r),0)} yolda</summary>${rows.map(([r,i])=>`<button class="flowRoute" data-route="${i}"><span style="color:${ITEM_COL(r.item)}">●</span> <b>${ITEM_NAME(r.item)}</b><small>${r.src} → ${routeDestination(r)}</small><small>${routeStatus(r)} · Haritada göster ↗</small></button>`).join('')}</details>`).join('')+'<p class="note">Bir bağlantıya dokun: yalnızca o yol 8 saniye görünür. Bu ekranda oyun duraklatılır.</p>',[['Devam et','pri',closeModal],['Geri','',openMenu]]);
+  modalEl.querySelectorAll('[data-route]').forEach(button=>button.onclick=()=>{selectedRoute=routes[Number(button.dataset.route)];selectedRouteUntil=time+8;closeModal();toast(ITEM_NAME(selectedRoute.item)+': '+selectedRoute.src+' → '+routeDestination(selectedRoute));});
+}
+function inView(x,y,pad=110) { return Math.abs(x-cam.x)<vw/(2*zoom)+pad && Math.abs(y-cam.y)<vh/(2*zoom)+pad; }
 function drawBeltGround() {
-  ctx.save();
-  for(const p of conveyorArt().ports){
-    if(!beltInView([p.x,p.y]))continue;
-    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(Math.atan2(p.dy,p.dx));
-    ctx.fillStyle='rgba(0,0,0,.22)';rr(-9,-5,23,12,4);
-    ctx.fillStyle='#79654b';rr(-10,-7,23,12,3);
-    ctx.fillStyle='#3b4747';rr(-8,-5,18,8,2);
-    ctx.fillStyle='#b0ada0';ctx.fillRect(-8,-6,18,1);ctx.fillRect(-8,3,18,1);
-    // 18 birimlik kısa kauçuk ağız; uzun hatlar ve dikey kuleler çizilmez.
-    const phase=(time*12)%5;ctx.strokeStyle='#6b7a73';ctx.lineWidth=1;
-    for(let x=-8+phase;x<10;x+=5){ctx.beginPath();ctx.moveTo(x,-3);ctx.lineTo(x,2);ctx.stroke();}
-    ctx.fillStyle='#9ca68b';circ(-8,-1,2);ctx.fillStyle='#d5b263';circ(10,-1,2);
-    ctx.restore();
+  // Belirsiz küçük bant ağızları yerine kaynağı ve hedefi yazan servis tabelaları.
+  const signs=[];
+  if(beltOn('bMill'))signs.push([DEPOT.x+46,DEPOT.y-18,'Buğday → Değirmen','#d5b263']);
+  if(beltOn('bUn'))signs.push([ST.M.x,ST.M.y+112,'Un → Fırınlar','#e4d9b3']);
+  if(beltOn('bAmbar'))signs.push([DEPOT.x+46,DEPOT.y+DEPOT.h+20,'Malzeme → Fırınlar','#b9ce8a']);
+  if(beltOn('bVitrin'))signs.push([COUNTER.x+COUNTER.w/2,COUNTER.y-COUNTER.h-14,'Fırınlar → Vitrin'+(G.unlocked.stand?' / Kendin al':''),'#e8ac72']);
+  if(beltOn('cDepo'))signs.push([620,CARSI_Y+74,'Ambar → Çarşı','#b9ce8a']);
+  if(beltOn('cUn'))signs.push([ST.M2.x,ST.M2.y+112,'Un → Hamur','#e4d9b3']);
+  if(beltOn('cHamur'))signs.push([ST.H.x,ST.H.y+112,'Hamur → Fırınlar','#e4d9b3']);
+  if(beltOn('cVitrin'))signs.push([COUNTER2.x+COUNTER2.w/2,COUNTER2.y-COUNTER2.h-14,'Fırınlar → Çarşı vitrini','#e8ac72']);
+  for(const id in FARM_LINES)if(beltOn(id)){
+    const fl=FARM_LINES[id],a=fl.path(fl.m)[0],col=ITEM_COL(fl.m);
+    if(!inView(a[0],a[1]))continue;
+    ctx.save();ctx.translate(a[0],a[1]);
+    ctx.fillStyle='#293a35';rr(-15,-16,30,29,6);ctx.fillStyle='#a6b6a3';rr(-12,-13,24,22,4);
+    if(id==='pompa'||id==='sagim'){
+      ctx.strokeStyle=col;ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-24,5);ctx.lineTo(-18,5);ctx.lineTo(-18,-2);ctx.lineTo(-10,-2);ctx.stroke();
+      ctx.save();ctx.rotate(time*2);ctx.strokeStyle='#344a48';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(7,0);ctx.moveTo(0,-7);ctx.lineTo(0,7);ctx.stroke();ctx.restore();
+    }else{ctx.fillStyle='#4b5543';rr(-9,-8,18,15,3);drawItem(0,0,'yumurta',.65);}
+    ctx.fillStyle=routeCount({line:id,dst:'depot',item:fl.m})?'#9ddd70':'#e6bd64';circ(10,-11,3);ctx.restore();
+    signs.push([a[0],a[1]+27,ITEM_NAME(fl.m)+' → Ambar',col]);
   }
-  // Paket sadece modüle girerken/çıkarken kısa süre görünür. Ara taşıma zeminin altında.
-  for(const r of riders){
-    const edge=Math.min(r.d,r.len-r.d);if(edge>18)continue;
-    const [x,y]=pointOnPath(r.path,r.d);if(!beltInView([x,y]))continue;
-    ctx.globalAlpha=Math.max(0,1-edge/18);drawItem(x,y+3,r.item,.65);
+  for(const [x,y,text,col]of signs){
+    if(!inView(x,y,40))continue;
+    ctx.font=`800 ${Math.max(9,11/zoom)}px system-ui,sans-serif`;const w=ctx.measureText(text).width+16;
+    ctx.fillStyle='#16261fef';rr(x-w/2,y-10,w,20,5);ctx.fillStyle=col;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,x,y);
   }
-  ctx.restore();
+  if(selectedRoute&&time<selectedRouteUntil){
+    const path=selectedRoute.path;ctx.save();ctx.strokeStyle=ITEM_COL(selectedRoute.item);ctx.lineWidth=3;ctx.setLineDash([7,6]);ctx.lineDashOffset=-time*28;ctx.beginPath();path.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.stroke();ctx.setLineDash([]);
+    const len=pathLen(path);for(let d=(time*70)%80;d<len;d+=80){const [x,y]=pointOnPath(path,d),[nx,ny]=pointOnPath(path,Math.min(len,d+3));if(!inView(x,y,20))continue;ctx.save();ctx.translate(x,y);ctx.rotate(Math.atan2(ny-y,nx-x));ctx.fillStyle=ITEM_COL(selectedRoute.item);ctx.beginPath();ctx.moveTo(5,0);ctx.lineTo(-3,-4);ctx.lineTo(-3,4);ctx.fill();ctx.restore();}ctx.restore();
+    const a=path[0],b=path[path.length-1];txt(selectedRoute.src,a[0],a[1]-20,11,'#fff');txt(routeDestination(selectedRoute),b[0],b[1]-20,11,'#fff');
+  }
 }
 
 /* ================= Müşteriler ve talep ================= */
@@ -2321,20 +2358,21 @@ const UNLOCK_MSG = {
   coop:'Kümes açıldı. Yuvalardan yumurta topla.', barn:'Ahır açıldı. İneklerden süt sağ.',
   S3:'Poğaça fırını kuruldu! 1 un + 1 yumurta + 1 süt.', gat:'Toplayıcı işe başladı. Talebi olan ürünün eksik hammaddesini getirir.',
   garden:'Çilek bahçesi açıldı.', susamF:'Susam tarlası açıldı.', S5:'Simit fırını kuruldu! 1 un + 1 su + 1 susam.', pancarF:'Pancar tarlası açıldı. Kürekle sök.',
-  S6:'Kurabiye fırını kuruldu! 1 un + 1 yumurta + 2 şeker pancarı.', kalfa:'Fırıncı kalfası geldi. Talebi en yüksek fırını hızlandırır.', bVitrin:'Vitrin bandı kuruldu! Fırınlardan vitrine ürün akıyor.', bMill:'Değirmen bandı kuruldu! Ambardaki buğday değirmene akıyor.',
+  S6:'Kurabiye fırını kuruldu! 1 un + 1 yumurta + 2 şeker pancarı.', kalfa:'Fırıncı kalfası geldi. Talebi en yüksek fırını hızlandırır.', bVitrin:'Ürün sevkiyatı kuruldu! Fırınlardan vitrine ürün akıyor.', bMill:'Buğday sevkiyatı kuruldu! Ambardaki buğday değirmene akıyor.',
   cafe:'Kafe açıldı! Misafirler masalara oturup siparişini masaya ister.', garson:'Garson işbaşında. Masalara servis yapar, boşalan masaları siler.',
-  bUn:'Un bandı kuruldu! Un talebi olan fırına akıyor.', bAmbar:'Malzeme bandı kuruldu! Ambardaki malzeme fırınlara akıyor.', S4:'Pasta fırını kuruldu! En kıymetli ürün.', car2:'İkinci çırak işe başladı.', gat2:'İkinci toplayıcı işe başladı.',
+  bUn:'Un dağıtımı kuruldu! Un talebi olan fırına akıyor.', bAmbar:'Malzeme dağıtımı kuruldu! Ambardaki malzeme fırınlara akıyor.', S4:'Pasta fırını kuruldu! En kıymetli ürün.', car2:'İkinci çırak işe başladı.', gat2:'İkinci toplayıcı işe başladı.',
   genis:'Yeni arazi senin! Çitteki kapı açıldı, güneyde yeni alanlar var.', kovan:'Arı kovanları kuruldu. Kovanlardan bal sağ.',
   carsi:'Çarşı şubesi açıldı! Çarşı yolundaki arka kapıdan gir: taş değirmen, hamur tezgahı, börek fırını hazır.',
   cs2:'Şube müdürü işbaşında: Çarşı şubesinde satış yapar.', car3:'Çarşı çırağı işe başladı.', findikB:'Fındık bahçesi açıldı.',
   S7:'Ay çöreği fırını kuruldu! 1 hamur + 2 fındık + 1 şeker pancarı.', zeytinB:'Zeytinlik açıldı.', S8:'Pide fırını kuruldu! 1 hamur + 1 zeytin + 1 yumurta.',
   S9:'Baklava fırını kuruldu! 2 hamur + 2 fındık + 2 bal. En kıymetli ürün.', stand:'Kendin al tezgahı kuruldu: çalışanlar ve vitrin bandı buraya da stok ayırır; müşteriler kendileri alır.',
-  pompa:'Su pompası çalışıyor: su borudan ambara akıyor.', kBant:'Kümes bandı çalışıyor: yumurtalar ambara geliyor.', sagim:'Sağım makinesi çalışıyor: süt ambara akıyor.',
+  pompa:'Su pompası: Su → Ambar. Akış ekranından izleyebilirsin.', kBant:'Yumurta toplama: Kümes → Ambar. Akış ekranından izleyebilirsin.', sagim:'Sağım makinesi: Süt → Ambar. Akış ekranından izleyebilirsin.',
   kumes2:'Kümese 2 yeni yuva eklendi.', ahir2:'Ahıra 2 yeni inek geldi.', traktor:'Traktör geldi: buğday tarlasını kendisi biçiyor.', bicer:'Biçerdöver geldi! Büyük buğday tarlası açıldı.',
   van:'Kamyonet alındı. Bir şube açınca tezgahtaki ürünleri taşımaya başlar.', sube1:'Kasaba şubesi açıldı! Kamyonet ürünleri buraya taşıyacak.', sube2:'Şehir şubesi açıldı! Ürünler 2 katı fiyata satılıyor.',
-  bCarsi:'Çarşı bandı kuruldu! Şube artık kendi kendini besliyor.',
+  bCarsi:'Çarşı sevkiyatı kuruldu! Şube artık kendi kendini besliyor.',
 };
 function complete(z) {
+  geometryRevision++;
   G.paid[z.id] = 0;
   if (z.where === 'floor') { zoneLock = z.id; zoneHold = 0; }
   if (z.up) { G.lv[z.id]++; toast(`${z.label} geliştirildi! Seviye ${G.lv[z.id]}`); }
@@ -2544,6 +2582,7 @@ function ell(x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, PI
 function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, PI2); ctx.fill(); }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); }
 function txt(s, x, y, size, col, weight = 800) {
+  if (!inView(x,y,180)) return;
   ctx.font = `${weight} ${size}px "Arial Rounded MT Bold",ui-rounded,"Trebuchet MS",system-ui,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineWidth = size / 4; ctx.strokeStyle = 'rgba(18,12,8,.85)'; ctx.lineJoin = 'round'; ctx.strokeText(s, x, y);
@@ -2675,6 +2714,7 @@ function drawTool(e, kind, tier, by) {
   ctx.restore();
 }
 function drawPerson(e, o) {
+  if (!inView(e.x,e.y,140)) return;
   const x = e.x, y = e.y, bob = e.moving ? Math.abs(Math.sin(e.phase)) * 2 : 0, l = e.moving ? Math.sin(e.phase) : 0;
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ell(x, y, 13, 5);
   ctx.fillStyle = '#2a2420'; rr(x - 7, y - 11 - (l > 0 ? 2 : 0), 5, 11, 2); rr(x + 2, y - 11 - (l < 0 ? 2 : 0), 5, 11, 2);
@@ -2739,6 +2779,7 @@ function drawBarrow(e, items) {
   if (items.length > 10) txt('+' + (items.length - 10), x, y - 36, 9, '#f7efe2');
 }
 function drawWorker(n, o) {
+  if (!inView(n.x,n.y,140)) return;
   const bp = barrowPos(n), behind = !bp.side && bp.d < 0;
   if (behind) drawBarrow(n, n.carry);
   drawPerson(n, o);
@@ -2773,6 +2814,7 @@ function drawCashier(cs) {
 
 /* İstasyonlar */
 function drawStation(s) {
+  if (!inView(s.x,s.y,140)) return;
   const x = s.x, y = s.y, working = G.st[s.id].out < outMax() && canBake(s);
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ell(x, y + 20, 40, 10);
   if (s.kind === 'prep') {
@@ -2829,6 +2871,7 @@ function drawStation(s) {
 }
 // İstasyonun önündeki malzeme kutuları
 function drawBins(s) {
+  if (!inView(s.x,s.y,140)) return;
   const keysR = Object.keys(s.recipe), cc = binCap();
   keysR.forEach((t, k) => {
     const p = binPos(s, k), n = G.st[s.id].bins[t], q = s.recipe[t];
@@ -2841,6 +2884,7 @@ function drawBins(s) {
   });
 }
 function drawTray(s) {
+  if (!inView(s.x,s.y,140)) return;
   const z = zoneOf(s), n = G.st[s.id].out;
   ctx.fillStyle = '#8a6d48'; rr(z.x - 22, z.y - 10, 44, 18, 4);
   ctx.fillStyle = '#6b5232'; rr(z.x - 20, z.y - 8, 40, 14, 3);
@@ -2848,6 +2892,7 @@ function drawTray(s) {
   if (n > 9) txt('×' + n, z.x + 26, z.y - 8, 9, '#f7efe2');
 }
 function drawCounter(sh = 0) {
+  if (!inView(COUNTERS[sh].x+COUNTERS[sh].w/2,COUNTERS[sh].y,340)) return;
   const { x, y, w, d, h } = COUNTERS[sh], regAnim = SV[sh].regAnim;
   ctx.fillStyle = 'rgba(0,0,0,.35)'; rr(x - 2, y + d - 6, w + 4, 12, 6);
   ctx.fillStyle = '#5e3a22'; rr(x, y + d - h, w, h, 6);
@@ -2891,6 +2936,7 @@ function drawDesk() {
 }
 // Ambar: sağ duvar boyunca beş hammadde kutusu, önünde kahverengi bırakma/alma alanı
 function drawDepot() {
+  if (!inView(BIN_COL_X,DEPOT.y+DEPOT.h/2,DEPOT.h/2+50)) return;
   const cc = depotCap();
   MAT_ORDER.forEach(m => {
     const y = depotBinY(m), x = BIN_COL_X, open = matOpen(m), n = G.depot[m];
@@ -2905,6 +2951,7 @@ function drawDepot() {
 }
 // Kafe masası: iki sandalye, örtülü yuvarlak masa; misafirin tabağı (yedikçe azalır), çay bardağı; kirliyse kırıntılı tabak
 function drawTable(i) {
+  if (!inView(TABLES[i].x,TABLES[i].y)) return;
   const t = TABLES[i], ts = tableState[i], g = ts.guest;
   for (const s of [-1, 1]) { ctx.fillStyle = '#5e3a22'; rr(t.x + s * 34 - 9, t.y - 4, 18, 12, 3); ctx.fillStyle = '#7a5434'; rr(t.x + s * 34 - 9, t.y - 20, 18, 6, 2); }
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ell(t.x, t.y + 8, 26, 7);
@@ -2977,7 +3024,7 @@ function drawLighting() {
   const f = G.dayT / DAY_LEN; if (f < .8) return;
   const a = Math.min(1, (f - .8) / .08);
   ctx.globalCompositeOperation = 'lighter';
-  const glow = (x, y, r, al) => { const g = ctx.createRadialGradient(x, y, 2, x, y, r); g.addColorStop(0, `rgba(255,170,70,${al * a})`); g.addColorStop(1, 'rgba(255,170,70,0)'); ctx.fillStyle = g; circ(x, y, r); };
+  const glow = (x, y, r, al) => { if (!inView(x,y,r)) return; const g = ctx.createRadialGradient(x, y, 2, x, y, r); g.addColorStop(0, `rgba(255,170,70,${al * a})`); g.addColorStop(1, 'rgba(255,170,70,0)'); ctx.fillStyle = g; circ(x, y, r); };
   for (const s of STATIONS) if (active(s)) glow(s.x, s.y + 8, 80, .28);
   for (const lx of [150, 380, 610]) { glow(lx, 60, 120, .18); if (G.unlocked.carsi) glow(lx, CARSI_Y + 60, 120, .18); }
   glow(CASHIER.x + 40, COUNTER.y, 110, .16); if (G.unlocked.carsi) glow(CASHIER2.x + 40, COUNTER2.y, 110, .16);
@@ -3003,6 +3050,7 @@ function drawLamp(x) {
 }
 // Fazla ürün tezgahı: çizgili tenteli ahşap stand, üstünde ürünler, "kendin al" tabelası
 function drawStand() {
+  if (!inView(STAND.x+STAND.w/2,STAND.y,150)) return;
   if (!G.unlocked.stand) return;
   const { x, y, w, d } = STAND;
   ctx.fillStyle = 'rgba(0,0,0,.3)'; rr(x - 2, y + d - 4, w + 4, 10, 5);
@@ -3101,6 +3149,7 @@ function building(x, y, w, h, depth, wallA, wallB, roofA, roofB, roofH) {
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.moveTo(x - w / 2 - 8, y - h + 4); ctx.lineTo(x + w / 2 + 8, y - h + 4); ctx.lineTo(x + w / 2 + 8, y - h + 8); ctx.lineTo(x - w / 2 - 8, y - h + 8); ctx.closePath(); ctx.fill();
 }
 function drawCoop() {
+  if (!inView(1338,212,170)) return;
   const x = 1338, y = 212;
   building(x, y, 72, 44, 16, '#a0703c', '#6b4a2e', '#c85a4a', '#7a2a22', 30);
   ctx.fillStyle = '#2a1a10'; ctx.beginPath(); ctx.arc(x, y - 10, 10, Math.PI, 0); ctx.fill(); ctx.fillRect(x - 10, y - 10, 20, 10);
@@ -3109,6 +3158,7 @@ function drawCoop() {
   ctx.strokeStyle = '#4a3220'; ctx.lineWidth = 1; for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x - 6 - i * 3, y + i * 4.5 - 1); ctx.lineTo(x - 2 - i * 3, y + i * 4.5 + 1); ctx.stroke(); }
 }
 function drawBarn() {
+  if (!inView(1383,668,170)) return;
   const x = 1383, y = 668;
   building(x, y, 96, 64, 22, '#c84a3a', '#7a2a22', '#8a3a30', '#4a1a14', 36);
   ctx.fillStyle = '#f2ede4'; rr(x - 22, y - 44, 44, 44, 2);
@@ -3117,6 +3167,7 @@ function drawBarn() {
   ctx.fillStyle = '#f2ede4'; rr(x - 9, y - 86, 18, 14, 2); ctx.fillStyle = '#e8c25a'; rr(x - 7, y - 84, 14, 10, 1);   // samanlık penceresi
 }
 function drawNode(nd) {
+  if (!inView(nd.x,nd.y,140)) return;
   const on = nodeOpen(nd), x = nd.x, y = nd.y;
   if (nd.req && !G.unlocked[nd.req] && !['bicer'].includes(nd.req)) return;   // büyütmeyle gelen yuva/inek alınmadan görünmez
   ctx.globalAlpha = on ? 1 : .4;
@@ -3186,6 +3237,7 @@ function drawAreaLock(a) {
   txt(`${a.label} · kilitli`, a.x, a.y - a.ry + 18, 12, '#f7efe2');
 }
 function drawCritter(a) {
+  if (!inView(a.x,a.y,140)) return;
   const x = a.x;
   if (a.k === 'fly') {
     const f = Math.abs(Math.sin(time * 18 + a.ph)), y = a.y;
@@ -3240,6 +3292,7 @@ function heart(x, y) {
   ctx.fillStyle = '#ff5b7a'; ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.bezierCurveTo(x - 10, y - 2, x - 5, y - 9, x, y - 3); ctx.bezierCurveTo(x + 5, y - 9, x + 10, y - 2, x, y + 6); ctx.fill();
 }
 function drawBubble(c) {
+  if (!inView(c.x,c.y,140)) return;
   const x = c.x, y = c.y - 74;
   if (c.state === 'leave') { if (c.leaveT < 1.4) { if (c.mood === 'angry') angryFace(x, y); else heart(x, y); } return; }
   if (c.state !== 'wait') return;
@@ -3528,10 +3581,11 @@ function openBook() {
 $('#bookBtn').addEventListener('click', openBook);
 
 /* ================= HUD ================= */
+$('#cash').addEventListener('animationend', () => $('#cash').classList.remove('pulse'));
 let shownMoney = -1, shownGoal = '', deskRefreshT = 0;
 function hud(dt) {
   const m = Math.floor(G.money);
-  if (m !== shownMoney) { const el = $('#cash'); if (m > shownMoney && shownMoney >= 0) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); } shownMoney = m; $('#money').textContent = fmt(m); }
+  if (m !== shownMoney) { const el = $('#cash'); if (m > shownMoney && shownMoney >= 0) { el.classList.add('pulse'); } shownMoney = m; $('#money').textContent = fmt(m); }
   const nz = nextOffer();
   let g;
   if (G.sold === 0 && G.st.E.out > 0 && !G.carry.length) g = 'Ekmek fırınının önünden ekmekleri al, <b>yeşil alana</b> götür';
@@ -3558,9 +3612,9 @@ function modal(html, buttons) {
   modalEl.innerHTML = `<div class="box" role="dialog" aria-modal="true">${html}<div class="btns"></div></div>`;
   const bx = modalEl.querySelector('.btns');
   for (const [l, c, fn] of buttons) { const b = document.createElement('button'); b.textContent = l; b.className = c || ''; b.onclick = fn; bx.appendChild(b); }
-  modalEl.hidden = false; paused = true; joy = null; bx.firstChild && bx.firstChild.focus();
+  modalEl.hidden = false; $('#mobileTools').hidden = true; paused = true; joy = null; bx.firstChild && bx.firstChild.focus();
 }
-function closeModal() { modalEl.hidden = true; paused = document.hidden; lastT = performance.now(); }
+function closeModal() { modalEl.hidden = true; $('#mobileTools').hidden = deskOpen; paused = document.hidden; lastT = performance.now(); }
 const HOW = `<ol>
   <li>Telefonda parmağını sürükleyerek, bilgisayarda <b>W A S D</b> ya da ok tuşlarıyla yürü. P ya da Esc duraklatır.</li>
   <li>Sağ duvardaki kapıdan <b>çiftliğe</b> çık. Tarladan buğday biç, kuyudan su çek. Yanında durman yeter.</li>
@@ -3577,7 +3631,8 @@ const HOW = `<ol>
   <li><b>Özel sipariş:</b> ara sıra vitrinin önüne şapkalı bir müşteri gelir. İstediği ürünleri vitrinin sağ arkasındaki sepete koy (kasiyer de yardım eder). Süre bitmeden tamamlarsan büyük ödül.</li>
   <li><b>Kafe:</b> açınca misafirler masalara oturur. İstedikleri ürünü masanın yanına götür; yiyip öderler ve masayı kirli bırakırlar. Kirli masanın yanında durarak sil. <b>Garson</b> tutarsan bunları o yapar.</li>
   <li><b>Fazla ürün tezgahı:</b> vitrin dolunca fırında biriken ürünleri ön kapının yanındaki tezgaha koy (çırak da koyar). Sokaktan gelenler kendileri alıp parasını bırakır.</li>
-  <li><b>Çiftlik makineleri</b> (usta masası → Çiftlik): su pompası, kümes bandı, sağım makinesi hammaddeyi kendiliğinden ambara getirir; traktör ve biçerdöver buğdayı biçer.</li>
+  <li><b>Akış</b>: otomatik sevkiyatların kaynağını, hedefini ve yoldaki miktarı gösterir. Bir bağlantıya dokununca yalnızca o yol kısa süre haritada görünür.</li>
+  <li><b>Çiftlik makineleri</b> (usta masası → Çiftlik): su pompası, yumurta toplama ve sağım makinesi hammaddeyi kendiliğinden ambara getirir; traktör ve biçerdöver buğdayı biçer.</li>
   <li><b>Yeni arazi:</b> çiftliğin güneyindeki çit kapısından geçilir: arı kovanları (bal), fındık bahçesi, zeytinlik ve biçerdöverle büyük buğday tarlası.</li>
   <li><b>Çarşı şubesi:</b> fırının ön kapısından çarşı yoluna çık, şubenin arka kapısından gir. Taş değirmende un, hamur tezgahında hamur (2 un + 1 su) yapılır; börek, ay çöreği, pide ve baklava hamurla pişer ve şubenin kendi vitrininde satılır.</li>
   <li><b>Kamyonet ve şubeler:</b> kamyonet tezgahtaki ürünleri kasaba ve şehir şubelerine götürür, orada daha pahalıya satılır; dönüşte kasayı getirir.</li>
@@ -3659,6 +3714,8 @@ function openMenu() {
   modal(`<h2>Duraklatıldı · ${GAME_VERSION}</h2><p>Satılan ürün: ${fmt(G.sold)}</p>`, [
     ['Devam et', 'pri', closeModal],
     ['İşletme durumu', '', openOperations],
+    ['Otomatik sevkiyat · Akış', '', openLogistics],
+    [`Hafif görüntü: ${G.lightGraphics ? 'Açık' : 'Kapalı'}`, '', () => { G.lightGraphics = !G.lightGraphics; resize(); save(); openMenu(); }],
     ['Çalışanlar ve dekorasyon', '', openManagement],
     ['Görevler', '', openQuests],
     ['Tarif defteri', '', openBook],
@@ -3677,7 +3734,8 @@ function openMenu() {
 // Kontroller HUD genişliğinden bağımsız; her telefon yönünde erişilebilir.
 const tools = document.createElement('nav'); tools.id='mobileTools'; tools.setAttribute('aria-label','Oyun kontrolleri'); app.appendChild(tools);
 tools.appendChild($('#bookBtn'));
-const statusBtn = document.createElement('button'); statusBtn.id='statusBtn'; statusBtn.textContent='Durum'; statusBtn.onclick=openOperations; tools.appendChild(statusBtn);
+const flowBtn = document.createElement('button'); flowBtn.id='flowBtn'; flowBtn.textContent='Akış'; flowBtn.onclick=openLogistics; tools.appendChild(flowBtn);
+// İşletme durumu Menü içinde; mobil araç çubuğu üç satırı aşmaz.
 for (const [label,delta] of [['−',-.1],['+',.1]]) { const b=document.createElement('button'); b.textContent=label; b.setAttribute('aria-label',delta < 0 ? 'Uzaklaştır' : 'Yakınlaştır'); b.onclick=() => {G.viewScale=Math.max(.6,Math.min(1.3,Math.round((G.viewScale+delta)*10)/10));resize();save();}; tools.appendChild(b); }
 tools.appendChild($('#pauseBtn')); $('#pauseBtn').appendChild(document.createTextNode(' Menü'));
 $('#pauseBtn').addEventListener('click', openMenu);
@@ -3714,15 +3772,21 @@ new ResizeObserver(resize).observe(app);
 new ResizeObserver(() => { $('#recipe').style.top = ($('#hud').offsetHeight + 12) + 'px'; }).observe($('#hud'));
 
 /* ================= Döngü ================= */
-let lastT = performance.now(), saveT = 0;
+let lastT = performance.now(), saveT = 0, lastPaint = -Infinity, hudTime = 0;
 // Döngü önce bir sonraki kareyi ister: bir karede hata olsa bile oyun durmaz (hata konsola bir kez yazılır).
 let frameErr = false;
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(.05, Math.max(0, (now - lastT) / 1000)); lastT = now;
+  if (document.hidden) { lastT = now; return; }
+  const minFrameMs = G.lightGraphics || Math.min(vw,vh) < 600 ? 1000/30 : 1000/60;
+  if (now - lastPaint < minFrameMs - .5) return;
+  lastPaint = now - (now - lastPaint < minFrameMs * 2 ? (now - lastPaint) % minFrameMs : 0);
+  const dt = Math.min(.1, Math.max(0, (now - lastT) / 1000)); lastT = now;
   try {
     if (!paused) { update(dt); if ((saveT += dt) > 4) { saveT = 0; save(); } }
-    render(); hud(dt); updateMusic();
+    render();
+    if ((hudTime += dt) >= .15) { hud(hudTime); hudTime = 0; }
+    updateMusic();
   } catch (e) { if (!frameErr) { frameErr = true; console.error('Köy Fırını kare hatası:', e); } }
 }
 function start(data) {
