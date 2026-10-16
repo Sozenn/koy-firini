@@ -12,10 +12,15 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  const sayfa = req.mode === 'navigate' || new URL(req.url).pathname.endsWith('/index.html');
+  const url = new URL(req.url);
+  const root = new URL('./', self.registration.scope);
+  // Ayrı oyun sayfaları fırının çevrimdışı kopyasının üzerine yazılamaz.
+  const bakery = url.pathname === root.pathname || url.pathname === root.pathname + 'index.html';
+  const sayfa = req.mode === 'navigate' || url.pathname.endsWith('.html');
+  const pageKey = bakery ? './index.html' : url.origin + url.pathname;
   if (sayfa) {
-    e.respondWith(fetch(req, {cache: 'no-store'}).then(res => { if (!res.ok) throw new Error('Sayfa alınamadı'); const k = res.clone(); e.waitUntil(caches.open(SURUM).then(c => c.put('./index.html', k))); return res; })
-      .catch(() => caches.match('./index.html')));
+    e.respondWith(fetch(req, {cache: 'no-store'}).then(res => { if (!res.ok) throw new Error('Sayfa alınamadı'); const k = res.clone(); e.waitUntil(caches.open(SURUM).then(c => c.put(pageKey, k))); return res; })
+      .catch(async () => (await caches.match(pageKey)) || Response.error()));
   } else {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { const k = res.clone(); caches.open(SURUM).then(c => c.put(req, k)); return res; })));
   }
