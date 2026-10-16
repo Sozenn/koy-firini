@@ -260,7 +260,7 @@ const $ = s => document.querySelector(s);
 const cv = $('#cv'), app = $('#app');
 let ctx = cv.getContext('2d');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v22';
+const GAME_VERSION = 'v23';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const FONT = '"Baloo 2","Arial Rounded MT Bold",ui-rounded,"Trebuchet MS",system-ui,sans-serif';
 // Varlıklar (assets-src altındaki betiklerle üretilir): ikon atlası, logo, sesler. ?v ile sürüm değişince önbellek tazelenir.
@@ -339,7 +339,7 @@ const ZONE_R = 34;
 const OFFERS = [
   { id:'cash',  where:'desk', tab:'staff', cost:100,  req:null,   label:'Kasiyer', desc:'Fırından ürünü alıp vitrine koyar ve müşteriye satar. Müşterinin istediği vitrinde yoksa fırına gidip getirir.' },
   // Usta işleri: otomasyondan sonra da fırıncının kendi elinden çıkan altın ürünler (rafı ve gurme müşterileri açar)
-  { id:'usta',  where:'floor', x:216, y:654, cost:120, req:'cash', label:'Usta rafı', icon:'g:ekmek' },
+  { id:'usta',  where:'floor', x:224, y:654, cost:120, req:'cash', label:'Usta rafı', icon:'g:ekmek' },
   { id:'car',   where:'desk', tab:'staff', cost:250,  req:'cash', label:'Çırak',  desc:'Müşterinin beklediği ürünü vitrine, unu ve ambardaki malzemeyi talebi olan istasyona el arabasıyla taşır.' },
   { id:'gat',   where:'desk', tab:'staff', cost:300, req:'car',   label:'Toplayıcı', desc:'Tarladan buğday, kuyudan su toplar, ambara getirir. Önce talebi olan ürünün eksik hammaddesini toplar; acil iş yoksa ambarı doldurur.' },
   { id:'coop',  where:'floor', x:1110, y:420, cost:400,  req:'gat',   label:'Kümes',          icon:'yumurta' },
@@ -455,9 +455,9 @@ const STREET_Y = 960;                                    // çarşı yolu (köy 
 const STAND = { x:110, y:836, w:120, d:28 };             // fazla ürün tezgahı (köy fırınının ön kapısının solu)
 const STAND_DROP = { x:110, y:794, w:120, h:38 };
 const GATE = { x:935, w:60 };                            // yeni araziye açılan çit kapısı
-const RAF = { x:166, y:604, w:100, d:28 };               // usta rafı: altın ürünler (usta masasının sağında)
-const RAF_DROP = { x:166, y:640, w:100, h:34 };          // önünde durunca elindeki altın ürünler rafa dizilir
-const GURME_SPOT = { x:216, y:702 };
+const RAF = { x:182, y:604, w:84, d:28 };                // usta rafı: altın ürünler (usta masasının sağında; arada geçiş payı bırakılır)
+const RAF_DROP = { x:182, y:640, w:84, h:34 };           // önünde durunca elindeki altın ürünler rafa dizilir
+const GURME_SPOT = { x:224, y:702 };
 const STATIC_BOX = [
   { x:34,  y:398, w:44, h:40 },                          // un çuvalları (sol duvar, kasiyerin arkası)
   { x:34,  y:800, w:60, h:44 },                          // odun yığını
@@ -2245,7 +2245,7 @@ function updateUsta(dt) {
   dropRaf(P, G.carry, dt);
   updateGurmes(dt);
 }
-const rafSpot = k => ({ x:RAF.x + 13 + (k % 6) * 15, y:RAF.y + 4 - Math.floor(k / 6) % 3 * 9 });
+const rafSpot = k => ({ x:RAF.x + 11 + (k % 6) * 12.4, y:RAF.y + 4 - Math.floor(k / 6) % 3 * 9 });
 function dropRaf(e, carry, dt) {
   if (!G.unlocked.usta || !inRect(e, RAF_DROP)) { e.rafT = 0; return false; }
   const i = carry.findIndex(isGold);
@@ -4185,7 +4185,13 @@ function drawUsta() {
   const s = UM ? UM.s : P.ustaSt; if (!s || !inView(s.x, s.y, 120)) return;
   const p = .55 + Math.sin(time * 5) * .25, g = ctx.createRadialGradient(s.x, s.y - 14, 2, s.x, s.y - 14, 46);
   g.addColorStop(0, `rgba(255,214,80,${p * .55})`); g.addColorStop(1, 'rgba(255,214,80,0)'); ctx.fillStyle = g; circ(s.x, s.y - 14, 46);
-  if (!UM) drawItem(s.x, s.y - 18 + Math.sin(time * 5) * 2, GOLD + s.out, canBake(s) ? 1.15 : .8);
+  // davet: fırıncının başının yanında (telefonda tarif şeridi fırının kubbesini örtebilir)
+  if (!UM) {
+    const b = Math.sin(time * 5) * 2, ok = canBake(s), x = P.x + 24, y = P.y - 50 + b;
+    ctx.fillStyle = 'rgba(28,14,6,.75)'; circ(x, y - 8, 15);
+    ctx.strokeStyle = ok ? '#ffd34a' : '#8a6a4a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y - 8, 15, 0, PI2); ctx.stroke();
+    ctx.globalAlpha = ok ? 1 : .5; drawItem(x, y + 2, GOLD + s.out, .95); ctx.globalAlpha = 1;
+  }
 }
 // Ekranda (düğmenin üstünde): dönen ibre, altın dilim, kalan süre
 function drawUstaHUD() {
@@ -4739,7 +4745,7 @@ const WHATS_NEW_V22 = [
 ];
 function openWhatsNew() {
   const li = list => list.map(([ic, t, d]) => `<li>${icon(ic)}<span><b>${t}</b><br>${d}</span></li>`).join('');
-  const sawV21 = G.seenVersion === 'v21';
+  const sawV21 = ['v21', 'v22'].includes(G.seenVersion);
   modal(`<img class="logo" src="assets/logo.png${ASSET_V}" alt="Köy Fırını"><h2 style="text-align:center">${GAME_VERSION} · Köy yeniden çizildi</h2>
     <ul class="whatsnew">${li(WHATS_NEW_V22)}</ul>
     ${sawV21 ? '' : `<h2 style="text-align:center;font-size:20px;margin-top:14px">v21 · Usta işleri</h2><ul class="whatsnew">${li(WHATS_NEW)}</ul>`}
@@ -4925,6 +4931,7 @@ function start(data) {
   resize();
   try { document.fonts?.ready.then(() => { floor = null; resize(); }); } catch (e) {}   // tabela yazıları asıl yazı tipiyle yeniden çizilsin
   if (!G.intro) openIntro();
+  else if (G.seenVersion === 'v22') G.seenVersion = GAME_VERSION;   // v23 yalnızca düzeltme: aynı pencere tekrar açılmaz
   else if (G.seenVersion !== GAME_VERSION) openWhatsNew();
   planProduction();
   requestAnimationFrame(frame);

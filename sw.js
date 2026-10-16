@@ -1,7 +1,7 @@
 // Köy Fırını servis çalışanı: oyunu önbelleğe alır, internet yokken de açılır.
 // Oyun sayfası önce internetten istenir (güncelleme hemen gelsin), internet yoksa önbellekten açılır.
 // Görseller ve sesler ilk kullanıldıklarında önbelleğe girer; dosya adlarındaki ?v= sürümü değişince yenisi iner.
-const SURUM = 'koy-firini-v22';
+const SURUM = 'koy-firini-v23';
 const DOSYALAR = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './maskable-512.png', './apple-touch-icon.png',
   './assets/items.png?v=21', './assets/logo.png?v=21', './assets/fonts/baloo2-600.woff2?v=21', './assets/fonts/baloo2-800.woff2?v=21'];
 
