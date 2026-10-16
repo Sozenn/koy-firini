@@ -6,6 +6,14 @@ Tarayıcıda ve telefonda oynanan bir köy fırını işletme oyunu: çiftlikten
 
 Aynı depoda ayrı bir oyun daha var: [Plaza Yazılım](https://sozenn.github.io/koy-firini/plaza-yazilim.html), bir yazılım ofisi işletme oyunu.
 
+## v22 · Köy yeniden çizildi
+
+- **Arka plan:** sıcak tonlu, budaklı ahşap zemin; düzensiz kesme taş döşeme; el dokuması kilimler; tuğla duvar, raflar, saksı çiçekleri.
+- **Çiftlik:** başak başak buğday tarlaları, yapraklı susam ve pancar bostanları, çilek sıraları, çiçekli çayırlar, nilüferli gölet, yol tabelası, dış çizgili ağaçlar, çalılar ve çitler.
+- **Yapılar:** tuğla kubbeli taş fırınlar, değirmen, hamur tezgâhı, vitrin, ambar, usta masası, kafe masaları, kümes ve ahır karakterlerle aynı dış çizgili stile getirildi.
+- **Işık:** pencerelerden süzülen huzmeler ve un tozu; renkleri koruyan altın sabah, turuncu akşam ve mavi gece; gece yanan fenerler, kümes ve ahır pencereleri.
+- Yeni sürüm bulunduğunda oyun kaydı doğrulayıp kendiliğinden güncellenir.
+
 ## v21 · Büyük yenileme
 
 ### Oynanış
