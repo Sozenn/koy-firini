@@ -1,7 +1,9 @@
 // Köy Fırını servis çalışanı: oyunu önbelleğe alır, internet yokken de açılır.
 // Oyun sayfası önce internetten istenir (güncelleme hemen gelsin), internet yoksa önbellekten açılır.
-const SURUM = 'koy-firini-v14';
-const DOSYALAR = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './maskable-512.png', './apple-touch-icon.png'];
+// Görseller ve sesler ilk kullanıldıklarında önbelleğe girer; dosya adlarındaki ?v= sürümü değişince yenisi iner.
+const SURUM = 'koy-firini-v21';
+const DOSYALAR = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './maskable-512.png', './apple-touch-icon.png',
+  './assets/items.png?v=21', './assets/logo.png?v=21', './assets/fonts/baloo2-600.woff2?v=21', './assets/fonts/baloo2-800.woff2?v=21'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(SURUM).then(c => c.addAll(DOSYALAR.map(url => new Request(url, {cache: 'reload'})))).then(() => self.skipWaiting()));
@@ -22,7 +24,7 @@ self.addEventListener('fetch', e => {
     e.respondWith(fetch(req, {cache: 'no-store'}).then(res => { if (!res.ok) throw new Error('Sayfa alınamadı'); const k = res.clone(); e.waitUntil(caches.open(SURUM).then(c => c.put(pageKey, k))); return res; })
       .catch(async () => (await caches.match(pageKey)) || Response.error()));
   } else {
-    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { const k = res.clone(); caches.open(SURUM).then(c => c.put(req, k)); return res; })));
+    // Yalnızca başarılı ve tam yanıtlar saklanır (ses dosyalarının kısmi 206 yanıtları önbelleğe girmez).
+    e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => { if (res.ok && res.status === 200) { const k = res.clone(); caches.open(SURUM).then(c => c.put(req, k)); } return res; })));
   }
 });
-

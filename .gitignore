@@ -1,0 +1,5 @@
+# Varlık üretiminin ara dosyaları (assets-src altındaki betikler yeniden üretir)
+assets-src/audio-tmp/
+assets-src/icons/*.png
+assets/fonts/*.ttf
+__pycache__/
