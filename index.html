@@ -187,7 +187,7 @@ const $ = s => document.querySelector(s);
 const cv = $('#cv'), app = $('#app');
 let ctx = cv.getContext('2d');
 // Dünya: üstte fırın (0-760) ve çiftlik (760-1460); fırının altında çarşı yolu, onun altında Çarşı şubesi; çiftliğin güneyi satılık arazi
-const GAME_VERSION = 'v19';
+const GAME_VERSION = 'v20';
 const W = 1460, H = 1800, SHOP_W = 760, PI2 = Math.PI * 2;
 const CARSI_Y = 1000;   // Çarşı şubesi fırınla aynı düzende, 1000 birim aşağıda
 const FARM_S = 892;     // çiftliğin güney çiti; altı "Yeni arazi"
@@ -519,7 +519,7 @@ function normalize(d) {
   return out;
 }
 function load() { try { return normalize(JSON.parse(localStorage.getItem(KEY))); } catch (e) {} return null; }
-function save() { if(riderGame===G) G.transit=riders.map(r=>({line:r.line,item:r.item,dst:r.dst,path:r.path.map(p=>p.slice()),d:r.d})); G.px = P.x; G.py = P.y; G.lastSeen = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
+function save() { if(riderGame===G) G.transit=riders.map(r=>({line:r.line,item:r.item,dst:r.dst,path:r.path.map(p=>p.slice()),d:r.d})); G.simulation={bake:{...bakeT},van:{...VAN}}; G.px = P.x; G.py = P.y; G.lastSeen = Date.now(); try { localStorage.setItem(KEY, JSON.stringify(G)); } catch (e) {} }
 
 /* ================= Ses ================= */
 let ac = null;
@@ -2358,22 +2358,29 @@ function updateBranches(dt) {
 const branchStock = b => PROD_ORDER.reduce((a, p) => a + b.stock[p], 0);
 
 /* ================= Çevrimdışı kazanç ve ustalık (prestij) ================= */
-// Oyun kapalıyken: kasiyer varsa son oynanıştaki ortalama kazancın dörtte biri kadar (en çok 4 saat), uzak şubeler de stoklarını satar.
-function offlineGain() {
-  if (!G.lastSeen) return;
-  const sec = Math.min((Date.now() - G.lastSeen) / 1000, 4 * 3600);
-  if (sec < 90) return;
-  const gold = G.unlocked.cash && G.rate > 0 ? Math.round(sec * G.rate * .25) : 0;
-  let brGold = 0;
-  for (const B of branchesOn()) {
-    const b = G.br[B.k], n = Math.min(branchStock(b), Math.floor(sec * branchRate()));
-    for (let i = 0; i < n; i++) { const avail = PROD_ORDER.filter(p => b.stock[p] > 0), p = pick(avail), v = PRODUCTS[p].val * B.mul * usta(); b.stock[p]--; b.till += v; b.sold++; G.stats[p]++; brGold += v; }
-  }
-  if (gold <= 0 && brGold <= 0) return;
-  G.money += gold;
-  const h = Math.floor(sec / 3600), m = Math.round(sec % 3600 / 60), dur = h ? `${h} saat ${m} dakika` : `${m} dakika`;
-  modal(`<h2>Sen yokken</h2><p>${dur} boyunca çalışanların fırını işletti.</p>${gold ? `<p>Kesene eklendi: <b style="color:var(--gold)">${fmt(gold)} altın</b></p>` : ''}${brGold ? `<p>Uzak şubeler ${fmt(brGold)} altınlık satış yaptı; kamyonet bir sonraki seferde kasayı getirir.</p>` : ''}`,
-    [['Harika', 'pri', closeModal]]);
+// Oyun kapalıyken ve sekme arka plandayken ekonomi tamamen durur.
+// Duvar saati ekonomiyi ilerletmez. Eski kayıtların lastSeen/rate alanları yalnızca uyumluluk içindir.
+function offlineGain() {}
+
+// Tüm çıkışları say: vitrinden kasaya taşımak yeni üretim talebi oluşturmaz.
+const productionReady = Object.fromEntries(STATIONS.map(s => [s.id, true]));
+let productionPlanT = 0;
+function planProduction() {
+  const stock = zeroProducts(), demand = zeroProducts();
+  const count = items => { for (const p of items) if (PRODUCTS[p]) stock[p]++; };
+  for (const p of PROD_ORDER) stock[p] = G.counter[p] + G.stand[p];
+  for (const s of OVENS) stock[s.out] += G.st[s.id].out;
+  count(G.carry); count(G.vanLoad); count(GAR.carry);
+  for (const n of carriers) count(n.carry);
+  for (const n of CSS) count(n.carry);
+  for (const r of riders) if (PRODUCTS[r.item]) stock[r.item]++;
+  for (const b of Object.values(G.br)) for (const p of PROD_ORDER) stock[p] += b.stock[p];
+  for (const c of customers) if (c.state !== 'leave') demand[c.want] += Math.max(0,c.n-c.got);
+  for (const g of guests) if (['wait','in'].includes(g.state)) demand[g.want] += Math.max(0,g.n-g.got);
+  for (const order of [ORDER,G.journal.active]) if (order) for (const p in order.items) demand[p] += Math.max(0,order.items[p]-order.got[p]);
+  for (const s of STATIONS) productionReady[s.id] = PRODUCTS[s.out]
+    ? stock[s.out] < 6 + Math.min(24,demand[s.out]) + branchesOn().length * 2
+    : G.st[s.id].out < Math.min(outMax(),4);
 }
 function devretModal() {
   const n = (G.prestige || 0) + 1;
@@ -2628,6 +2635,7 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; joy = nu
 /* ================= Güncelleme ================= */
 function update(dt) {
   time += dt;
+  if ((productionPlanT -= dt) <= 0) { planProduction(); productionPlanT = .5; }
   let ix = 0, iy = 0;
   if (joy) { const dx = joy.x - joy.ox, dy = joy.y - joy.oy, d = Math.hypot(dx, dy); if (d > 6) { const m = Math.min(1, d / 50); ix = dx / d * m; iy = dy / d * m; } }
   if (keys.KeyA || keys.ArrowLeft) ix -= 1; if (keys.KeyD || keys.ArrowRight) ix += 1;
@@ -2640,7 +2648,7 @@ function update(dt) {
   // Üretim: her istasyon yalnızca kendi kutularındaki malzemeyle çalışır; tepsisi dolunca durur.
   for (const s of STATIONS) {
     if (!active(s)) continue;
-    if (G.st[s.id].out >= outMax() || !canBake(s)) continue;
+    if (!productionReady[s.id] || G.st[s.id].out >= outMax() || !canBake(s)) continue;
     bakeT[s.id] += dt;
     if (s.kind === 'mill' && Math.random() < dt * 6) chips(s.x + rndIn(-14, 14), s.y - 4, '#f7efe2', 1);
     if (bakeT[s.id] >= bakeInt(s)) {
@@ -2947,7 +2955,7 @@ function drawCashier(cs) {
 /* İstasyonlar */
 function drawStation(s) {
   if (!inView(s.x,s.y,140)) return;
-  const x = s.x, y = s.y, working = G.st[s.id].out < outMax() && canBake(s);
+  const x = s.x, y = s.y, working = productionReady[s.id] && G.st[s.id].out < outMax() && canBake(s);
   ctx.fillStyle = 'rgba(0,0,0,.35)'; ell(x, y + 20, 40, 10);
   if (s.kind === 'prep') {
     // hamur tezgahı: ahşap tezgah, un serpilmiş mermer, yoğrulan hamur ve oklava
@@ -2997,6 +3005,7 @@ function drawStation(s) {
   }
   // durum çubuğu ve tabela
   if (G.st[s.id].out >= outMax()) txt('Kasa dolu', x, y - 58, 9.5, '#f7efe2');
+  else if (!productionReady[s.id]) txt('Stok yeterli · bekliyor', x, y - 60, 9.5, '#bde0b0');
   else if (working) { ctx.fillStyle = 'rgba(0,0,0,.55)'; rr(x - 22, y - 62, 44, 5, 2.5); ctx.fillStyle = '#f2b544'; rr(x - 22, y - 62, 44 * bakeT[s.id] / bakeInt(s), 5, 2.5); }
   else txt('Malzeme yok', x, y - 60, 9.5, '#ffb08a');
   if (s.kind === 'oven' && DEM[s.out] > 0) { ctx.fillStyle = '#e8643a'; rr(x - 30, y - 82, 60, 15, 7); txt(`${DEM[s.out]} sipariş`, x, y - 74.5, 9, '#fff'); }
@@ -3970,7 +3979,7 @@ function openDecor() {
 }
 function openMenu() {
   if (deskOpen) closeDesk();
-  modal(`<h2>Duraklatıldı · ${GAME_VERSION}</h2><p>Satılan ürün: ${fmt(G.sold)}</p>`, [
+  modal(`<h2>Duraklatıldı · ${GAME_VERSION}</h2><p>Satılan ürün: ${fmt(G.sold)}</p><p>Sen yokken oyun durur. Stok yeterliyken üretim bekler; satış oldukça devam eder.</p>`, [
     ['Devam et', 'pri', closeModal],
     ['Köy panosu · Sipariş ve ödüller', 'pri', () => openVillage('orders')],
     ['İşletme durumu', '', openOperations],
@@ -4001,6 +4010,7 @@ tools.appendChild($('#pauseBtn')); $('#pauseBtn').appendChild(document.createTex
 $('#pauseBtn').addEventListener('click', openMenu);
 document.addEventListener('visibilitychange', () => { if (document.hidden) { paused = true; joy = null; save(); } else { paused = !modalEl.hidden; lastT = performance.now(); } });
 addEventListener('pagehide', save);
+addEventListener('pageshow', () => { lastT = performance.now(); });
 // Ana ekrandaki uygulama çoğu zaman yeniden yüklenmeden devam eder.
 let updateCheckRunning = false, lastUpdateCheck = 0;
 async function checkGameUpdate() {
@@ -4059,11 +4069,18 @@ function start(data) {
   if (G.unlocked.gat) addGatherer(0);
   if (G.unlocked.gat2) addGatherer(1);
   if (G.unlocked.car3) addCarrier(2);
-  deliverVanLoad();   // sayfa kapanırken yolda kalan yük şubelere teslim edilir
+  // Yük açılışta ışınlanmaz; kaydedilen yolculuk ve pişirme kaldığı yerden sürer.
+  const sim=G.simulation;
+  for(const s of STATIONS) bakeT[s.id]=Number.isFinite(sim?.bake?.[s.id])?Math.max(0,Math.min(bakeInt(s),sim.bake[s.id])):0;
+  const van=sim?.van;
+  if(van&&['park','load','go','away','back'].includes(van.state)) {
+    VAN.state=van.state;
+    for(const k of ['x','t','wait','till'])if(Number.isFinite(van[k]))VAN[k]=van[k];
+  } else if(G.vanLoad.length) { VAN.state='go'; VAN.x=VAN.home; }
   resize();
   if (!G.intro) modal(`<h2>Köy Fırını</h2><p>Köyün fırıncısısın. Çiftlikten malzeme topla, değirmende un öğüt, fırında pişir, müşterilere sıcak sıcak sat.</p>${HOW}`,
     [['Fırını aç', 'pri', () => { G.intro = true; save(); closeModal(); }]]);
-  else offlineGain();
+  planProduction();
   requestAnimationFrame(frame);
 }
 try { window.claude?.hot?.snapshot?.(() => { G.px = P.x; G.py = P.y; return { G }; }); } catch (e) {}
