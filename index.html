@@ -4672,13 +4672,17 @@ async function checkGameUpdate() {
     const button = document.createElement('button');
     button.id = 'gameUpdate'; button.textContent = version[1] + ' hazır · Kaydet ve güncelle';
     button.style.cssText = 'position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translateX(-50%);z-index:10000;max-width:92vw;background:#195c40;color:white;padding:12px 16px;border:2px solid #fff;border-radius:14px;box-shadow:0 3px 18px #0006';
-    button.onclick = () => {
+    const apply = () => {
       save();
       try { if (localStorage.getItem(KEY) !== JSON.stringify(G)) throw new Error('save'); }
-      catch (_) { button.textContent = 'Kayıt yapılamadı; güncelleme bekletildi'; return; }
-      location.reload();
+      catch (_) { button.textContent = 'Kayıt yapılamadı; güncelleme bekletildi'; return false; }
+      location.reload(); return true;
     };
+    button.onclick = apply;
     document.body.appendChild(button);
+    // Yeni sürüm bulununca oyuncu bir şey yapmadan kaydedilip güncellenir; kayıt doğrulanamazsa düğme elle denemek için kalır.
+    button.textContent = version[1] + ' yükleniyor · kaydın korunuyor';
+    setTimeout(apply, 1200);
   } catch (_) { /* Çevrimdışıyken kayıtlı oyun devam eder. */ }
   finally { updateCheckRunning = false; }
 }
